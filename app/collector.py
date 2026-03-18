@@ -159,7 +159,7 @@ class DataCollector:
             enriched_count, len(snapshots), self._node_map.size,
         )
 
-        # Enrich with direct RPC results (latency, peer count, uptime, server_state)
+        # Enrich with direct RPC results (latency, peer count, uptime, server_state, ledger interval)
         if isinstance(rpc_results, list):
             for result in rpc_results:
                 if not result:
@@ -170,20 +170,37 @@ class DataCollector:
                 master = self._node_map.get_master_key(node_key)
                 if master and master in snapshots:
                     s = snapshots[master]
-                    if result.get("latency_ms") is not None:
-                        if s.metrics.latency_ms is not None:
-                            s.metrics.latency_ms = (s.metrics.latency_ms + result["latency_ms"]) / 2
-                        else:
-                            s.metrics.latency_ms = result["latency_ms"]
-                    if result.get("peers") is not None and s.metrics.peer_count is None:
-                        s.metrics.peer_count = result["peers"]
-                    if result.get("uptime") is not None and s.metrics.uptime_seconds is None:
-                        s.metrics.uptime_seconds = result["uptime"]
-                    if result.get("server_state"):
-                        s.metrics.server_state = result["server_state"]
-                    # RPC validated_ledger.age is the most accurate ledger interval — prefer it
-                    if result.get("validated_ledger_age") is not None:
-                        s.metrics.avg_ledger_interval = float(result["validated_ledger_age"])
+                else:
+                    # RPC node not mapped to a VHS validator — create an entry
+                    # so every directly-queried node appears in output with full metrics
+                    if node_key not in snapshots:
+                        snapshots[node_key] = ValidatorSnapshot(
+                            public_key=node_key,
+                            metrics=ValidatorMetrics(),
+                        )
+                    s = snapshots[node_key]
+
+                if result.get("latency_ms") is not None:
+                    if s.metrics.latency_ms is not None:
+                        s.metrics.latency_ms = (s.metrics.latency_ms + result["latency_ms"]) / 2
+                    else:
+                        s.metrics.latency_ms = result["latency_ms"]
+                if result.get("peers") is not None:
+                    s.metrics.peer_count = result["peers"]
+                if result.get("uptime") is not None:
+                    s.metrics.uptime_seconds = result["uptime"]
+                if result.get("server_state"):
+                    s.metrics.server_state = result["server_state"]
+                if result.get("server_version"):
+                    s.metrics.server_version = result["server_version"]
+                # RPC validated_ledger.age is the most accurate ledger interval
+                if result.get("validated_ledger_age") is not None:
+                    s.metrics.avg_ledger_interval = float(result["validated_ledger_age"])
+                # Compute uptime-based ledger interval from RPC complete_ledgers
+                if s.metrics.avg_ledger_interval is None and result.get("complete_ledgers") and result.get("uptime"):
+                    s.metrics.avg_ledger_interval = self._compute_ledger_interval(
+                        result["complete_ledgers"], result["uptime"]
+                    )
 
         # ASN lookup for validators with known IPs
         await self._enrich_asn(snapshots, ip_by_master)
