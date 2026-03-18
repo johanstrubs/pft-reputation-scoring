@@ -125,9 +125,10 @@ async def get_methodology():
         },
         thresholds={
             "agreement": {"min": 0.8, "max": 1.0, "scoring": "linear, <0.8 = 0"},
-            "uptime": {"scoring": "normalized against max observed uptime in cohort"},
+            "uptime": {"scoring": "normalized against max observed uptime in cohort", "unit": "seconds, also reported as percentage"},
             "latency": {"full_marks_ms": 50, "zero_ms": 500, "scoring": "linear between"},
             "peer_count": {"full_marks": 10, "zero": 3, "scoring": "linear between"},
+            "avg_ledger_interval": {"unit": "seconds per ledger", "description": "computed from complete_ledgers range / uptime"},
             "version": {"latest": 1.0, "one_behind": 0.8, "older": 0.5},
             "diversity": {"penalty_threshold": 0.30, "scoring": "penalty if >30% share same ASN"},
         },

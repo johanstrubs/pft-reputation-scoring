@@ -7,8 +7,10 @@ class ValidatorMetrics(BaseModel):
     agreement_24h: float | None = None
     agreement_30d: float | None = None
     uptime_seconds: int | None = None
+    uptime_pct: float | None = None
     latency_ms: float | None = None
     peer_count: int | None = None
+    avg_ledger_interval: float | None = None  # seconds per ledger
     server_version: str | None = None
     server_state: str | None = None
     asn: int | None = None

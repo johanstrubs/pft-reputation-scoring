@@ -144,6 +144,10 @@ class DataCollector:
                 outbound = node.get("outbound_count") or 0
                 s.metrics.peer_count = inbound + outbound
                 s.metrics.server_state = node.get("server_state")
+                # Compute average ledger interval from complete_ledgers + uptime
+                s.metrics.avg_ledger_interval = self._compute_ledger_interval(
+                    node.get("complete_ledgers"), node.get("uptime")
+                )
                 if node.get("country_code"):
                     s.metrics.country = node["country_code"]
                 if ip:
@@ -177,6 +181,9 @@ class DataCollector:
                         s.metrics.uptime_seconds = result["uptime"]
                     if result.get("server_state"):
                         s.metrics.server_state = result["server_state"]
+                    # Use validated_ledger.age as ledger interval if we don't have one
+                    if result.get("validated_ledger_age") is not None and s.metrics.avg_ledger_interval is None:
+                        s.metrics.avg_ledger_interval = float(result["validated_ledger_age"])
 
         # ASN lookup for validators with known IPs
         await self._enrich_asn(snapshots, ip_by_master)
@@ -309,6 +316,22 @@ class DataCollector:
             logger.info("DNS resolution discovered %d new node->validator mappings", discovered)
 
     @staticmethod
+    def _compute_ledger_interval(complete_ledgers: str | None, uptime: int | None) -> float | None:
+        """Compute average seconds per ledger from complete_ledgers range and uptime."""
+        if not complete_ledgers or not uptime or uptime <= 0:
+            return None
+        try:
+            parts = complete_ledgers.split("-")
+            if len(parts) == 2:
+                start, end = int(parts[0]), int(parts[1])
+                ledger_count = end - start
+                if ledger_count > 0:
+                    return round(uptime / ledger_count, 3)
+        except (ValueError, IndexError):
+            pass
+        return None
+
+    @staticmethod
     def _resolve_domain(domain: str) -> list[str]:
         """Resolve a domain to a list of IP addresses."""
         try:
@@ -365,6 +388,7 @@ class DataCollector:
             elapsed_ms = (time.monotonic() - start) * 1000
             data = resp.json()
             info = data.get("result", {}).get("info", {})
+            validated_ledger = info.get("validated_ledger", {})
             return {
                 "url": url,
                 "latency_ms": round(elapsed_ms, 2),
@@ -374,7 +398,9 @@ class DataCollector:
                 "peers": info.get("peers"),
                 "uptime": info.get("uptime"),
                 "server_version": info.get("build_version"),
-                "validated_ledger_seq": info.get("validated_ledger", {}).get("seq"),
+                "validated_ledger_seq": validated_ledger.get("seq"),
+                "validated_ledger_age": validated_ledger.get("age"),
+                "complete_ledgers": info.get("complete_ledgers"),
             }
         except Exception as e:
             logger.warning("RPC query to %s failed: %s", url, e)

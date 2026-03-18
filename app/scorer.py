@@ -37,6 +37,11 @@ class ReputationScorer:
         now = datetime.now(timezone.utc).isoformat()
         results = []
 
+        # Compute uptime_pct for all validators (relative to max observed)
+        for snap in snapshots:
+            if snap.metrics.uptime_seconds is not None:
+                snap.metrics.uptime_pct = round(100.0 * snap.metrics.uptime_seconds / max_uptime, 2)
+
         for snap in snapshots:
             sub = ValidatorSubScores(
                 agreement_1h=self._score_agreement(snap.metrics.agreement_1h),

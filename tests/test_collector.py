@@ -44,6 +44,29 @@ class TestNodeValidatorMap:
         assert m.needs_probe() is False
 
 
+class TestComputeLedgerInterval:
+    def test_normal_range(self):
+        # 1000 ledgers in 3500 seconds = 3.5 sec/ledger
+        result = DataCollector._compute_ledger_interval("100-1100", 3500)
+        assert abs(result - 3.5) < 0.01
+
+    def test_none_inputs(self):
+        assert DataCollector._compute_ledger_interval(None, 3500) is None
+        assert DataCollector._compute_ledger_interval("100-1100", None) is None
+        assert DataCollector._compute_ledger_interval(None, None) is None
+
+    def test_zero_uptime(self):
+        assert DataCollector._compute_ledger_interval("100-1100", 0) is None
+
+    def test_invalid_format(self):
+        assert DataCollector._compute_ledger_interval("invalid", 3500) is None
+
+    def test_single_ledger_range(self):
+        # Large range = long running node, gives accurate interval
+        result = DataCollector._compute_ledger_interval("1-1000000", 3500000)
+        assert abs(result - 3.5) < 0.01
+
+
 class TestResolveDomain:
     def test_resolve_localhost(self):
         ips = DataCollector._resolve_domain("localhost")
