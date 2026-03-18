@@ -45,10 +45,15 @@ class TestNodeValidatorMap:
 
 
 class TestComputeLedgerInterval:
-    def test_normal_range(self):
-        # 1000 ledgers in 3500 seconds = 3.5 sec/ledger
-        result = DataCollector._compute_ledger_interval("100-1100", 3500)
+    def test_large_range(self):
+        # 100000 ledgers in 350000 seconds = 3.5 sec/ledger
+        result = DataCollector._compute_ledger_interval("100-100100", 350000)
         assert abs(result - 3.5) < 0.01
+
+    def test_small_range_returns_none(self):
+        # Less than 10000 ledgers — not reliable
+        result = DataCollector._compute_ledger_interval("100-1100", 3500)
+        assert result is None
 
     def test_none_inputs(self):
         assert DataCollector._compute_ledger_interval(None, 3500) is None
@@ -61,7 +66,7 @@ class TestComputeLedgerInterval:
     def test_invalid_format(self):
         assert DataCollector._compute_ledger_interval("invalid", 3500) is None
 
-    def test_single_ledger_range(self):
+    def test_full_chain_range(self):
         # Large range = long running node, gives accurate interval
         result = DataCollector._compute_ledger_interval("1-1000000", 3500000)
         assert abs(result - 3.5) < 0.01

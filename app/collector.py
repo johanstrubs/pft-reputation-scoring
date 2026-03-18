@@ -181,8 +181,8 @@ class DataCollector:
                         s.metrics.uptime_seconds = result["uptime"]
                     if result.get("server_state"):
                         s.metrics.server_state = result["server_state"]
-                    # Use validated_ledger.age as ledger interval if we don't have one
-                    if result.get("validated_ledger_age") is not None and s.metrics.avg_ledger_interval is None:
+                    # RPC validated_ledger.age is the most accurate ledger interval — prefer it
+                    if result.get("validated_ledger_age") is not None:
                         s.metrics.avg_ledger_interval = float(result["validated_ledger_age"])
 
         # ASN lookup for validators with known IPs
@@ -317,7 +317,12 @@ class DataCollector:
 
     @staticmethod
     def _compute_ledger_interval(complete_ledgers: str | None, uptime: int | None) -> float | None:
-        """Compute average seconds per ledger from complete_ledgers range and uptime."""
+        """Compute average seconds per ledger from complete_ledgers range and uptime.
+
+        Only reliable when the node has a large enough ledger range relative to uptime.
+        For nodes with a small local range (recently synced), the result will be
+        inflated. We require at least 10000 ledgers for a meaningful average.
+        """
         if not complete_ledgers or not uptime or uptime <= 0:
             return None
         try:
@@ -325,7 +330,7 @@ class DataCollector:
             if len(parts) == 2:
                 start, end = int(parts[0]), int(parts[1])
                 ledger_count = end - start
-                if ledger_count > 0:
+                if ledger_count >= 10000:
                     return round(uptime / ledger_count, 3)
         except (ValueError, IndexError):
             pass
