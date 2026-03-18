@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  scoring:
+    build: .
+    container_name: pft-reputation-scoring
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    network_mode: host
