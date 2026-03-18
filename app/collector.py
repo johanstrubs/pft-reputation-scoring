@@ -54,6 +54,11 @@ class DataCollector:
     def __init__(self):
         self._asn_cache: dict[str, dict] = {}
         self._node_map = NodeValidatorMap()
+        # Load manual key mappings from config
+        for node_key, master_key in settings.key_mapping_pairs.items():
+            self._node_map.add(node_key, master_key, source="manual_config")
+        if settings.key_mapping_pairs:
+            logger.info("Loaded %d manual key mappings from config", len(settings.key_mapping_pairs))
 
     async def collect(self) -> list[ValidatorSnapshot]:
         snapshots: dict[str, ValidatorSnapshot] = {}
