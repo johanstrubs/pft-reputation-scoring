@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    vhs_base_url: str = "http://rpc.testnet.postfiat.org:3000"
+    vhs_base_url: str = "https://vhs.testnet.postfiat.org"
     local_node_rpc: str = "http://127.0.0.1:5005"
     extra_node_rpcs: str = ""
     poll_interval_seconds: int = 300

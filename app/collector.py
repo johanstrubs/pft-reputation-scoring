@@ -37,20 +37,25 @@ class DataCollector:
                 snapshots[key] = ValidatorSnapshot(
                     public_key=key,
                     domain=v.get("domain"),
-                    unl=v.get("unl", False),
+                    unl=bool(v.get("unl")),
                     metrics=ValidatorMetrics(
                         agreement_1h=self._parse_agreement(v.get("agreement_1h")),
                         agreement_24h=self._parse_agreement(v.get("agreement_24h")),
-                        agreement_30d=self._parse_agreement(v.get("agreement_30d")),
+                        agreement_30d=self._parse_agreement(v.get("agreement_30day") or v.get("agreement_30d")),
                         server_version=v.get("server_version"),
                     ),
                 )
+                # Also index by signing_key for topology matching
+                signing = v.get("signing_key")
+                if signing and signing != key:
+                    snapshots[signing] = snapshots[key]
             logger.info("Collected %d validators from VHS", len(snapshots))
         else:
             logger.error("Failed to fetch VHS validators: %s", vhs_validators)
 
-        # Enrich with topology data (uptime, latency, peer count, IP)
+        # Enrich with topology data (uptime, latency, peer count, IP, geo)
         topology_ips: dict[str, str] = {}
+        enriched_count = 0
         if isinstance(vhs_topology, list):
             for node in vhs_topology:
                 node_key = node.get("node_public_key")
@@ -63,11 +68,16 @@ class DataCollector:
                 if node_key in snapshots:
                     s = snapshots[node_key]
                     s.metrics.uptime_seconds = node.get("uptime")
-                    s.metrics.latency_ms = node.get("latency")
+                    s.metrics.latency_ms = node.get("io_latency_ms")
                     inbound = node.get("inbound_count") or 0
                     outbound = node.get("outbound_count") or 0
                     s.metrics.peer_count = inbound + outbound
-            logger.info("Enriched with topology data for %d nodes", len(vhs_topology))
+                    s.metrics.server_state = node.get("server_state")
+                    # Use geo data from topology if available
+                    if node.get("country_code"):
+                        s.metrics.country = node["country_code"]
+                    enriched_count += 1
+            logger.info("Enriched %d validators with topology data (%d total nodes)", enriched_count, len(vhs_topology))
         else:
             logger.error("Failed to fetch VHS topology: %s", vhs_topology)
 
@@ -100,7 +110,14 @@ class DataCollector:
         # ASN lookup for validators with known IPs
         await self._enrich_asn(snapshots, topology_ips)
 
-        return list(snapshots.values())
+        # Deduplicate — multiple keys may point to the same snapshot object
+        seen = set()
+        unique = []
+        for snap in snapshots.values():
+            if id(snap) not in seen:
+                seen.add(id(snap))
+                unique.append(snap)
+        return unique
 
     async def _fetch_vhs_validators(self) -> list[dict]:
         try:
