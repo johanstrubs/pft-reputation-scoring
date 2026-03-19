@@ -186,6 +186,42 @@ header .subtitle {
 .health-label.yellow { color: var(--yellow); }
 .health-label.red { color: var(--red); }
 
+/* Chevron expand indicator */
+.chevron-col {
+    width: 28px;
+    padding: 0 4px !important;
+    cursor: default;
+}
+
+.chevron-cell {
+    width: 28px;
+    padding: 0 4px !important;
+    text-align: center;
+}
+
+.chevron {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+
+.chevron.open {
+    transform: rotate(90deg);
+}
+
+.validator-row:hover .chevron {
+    color: var(--accent);
+}
+
+/* Metric columns in main table */
+.metric-col {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
 /* Sparkline */
 .sparkline-cell {
     width: 120px;
@@ -380,5 +416,6 @@ footer a:hover {
     .leaderboard-table td { padding: 8px 6px; }
     .sparkline-cell { display: none; }
     .hide-mobile { display: none; }
+    .metric-col { display: none; }
     .metrics-grid { grid-template-columns: 1fr; }
 }

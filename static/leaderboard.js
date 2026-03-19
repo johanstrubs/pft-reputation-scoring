@@ -221,6 +221,8 @@ function getSortedValidators(validators) {
     return sorted;
 }
 
+const COL_COUNT = 9; // total columns for detail row colspan
+
 function renderTable(data) {
     const validators = getSortedValidators(data.validators);
     const trends = trendsData?.trends || {};
@@ -234,10 +236,14 @@ function renderTable(data) {
     let html = `
         <thead>
             <tr>
+                <th class="chevron-col"></th>
                 <th onclick="handleSort('composite_score')"># ${sortArrow('composite_score')}</th>
                 <th onclick="handleSort('public_key')">Validator ${sortArrow('public_key')}</th>
                 <th onclick="handleSort('composite_score')">Score ${sortArrow('composite_score')}</th>
                 <th onclick="handleSort('health')">Health ${sortArrow('health')}</th>
+                <th class="hide-mobile metric-col">Agmt 24h</th>
+                <th class="hide-mobile metric-col">Latency</th>
+                <th class="hide-mobile metric-col">Peers</th>
                 <th class="hide-mobile sparkline-cell">7d Trend</th>
             </tr>
         </thead>
@@ -250,9 +256,13 @@ function renderTable(data) {
         const label = healthLabel(v.composite_score);
         const sparkData = trends[v.public_key] || [];
         const rankClass = rank <= 3 ? `rank-${rank}` : '';
+        const m = v.metrics;
+        // Auto-expand rank #1
+        const isExpanded = rank === 1;
 
         html += `
-            <tr onclick="toggleDetail('${v.public_key}')">
+            <tr class="validator-row${isExpanded ? ' expanded' : ''}" onclick="toggleDetail('${v.public_key}')">
+                <td class="chevron-cell"><span class="chevron${isExpanded ? ' open' : ''}" id="chevron-${v.public_key}">&#9656;</span></td>
                 <td class="rank ${rankClass}">${rank}</td>
                 <td>
                     <span class="validator-id">${truncateKey(v.public_key)}</span>
@@ -263,10 +273,13 @@ function renderTable(data) {
                     <span class="health-dot ${tier}"></span>
                     <span class="health-label ${tier}">${label}</span>
                 </td>
+                <td class="hide-mobile metric-col">${fmtPct(m.agreement_24h)}</td>
+                <td class="hide-mobile metric-col">${m.latency_ms !== null && m.latency_ms !== undefined ? fmt(m.latency_ms) + 'ms' : '-'}</td>
+                <td class="hide-mobile metric-col">${m.peer_count !== null && m.peer_count !== undefined ? m.peer_count : '-'}</td>
                 <td class="hide-mobile sparkline-cell">${sparklineSVG(sparkData)}</td>
             </tr>
-            <tr class="detail-row" id="detail-${v.public_key}">
-                <td colspan="5">${renderDetailPanel(v, sparkData, weights)}</td>
+            <tr class="detail-row${isExpanded ? ' open' : ''}" id="detail-${v.public_key}">
+                <td colspan="${COL_COUNT}">${renderDetailPanel(v, sparkData, weights)}</td>
             </tr>
         `;
     });
@@ -333,8 +346,10 @@ function renderDetailPanel(v, sparkData, weights) {
 
 function toggleDetail(pubkey) {
     const row = document.getElementById(`detail-${pubkey}`);
+    const chevron = document.getElementById(`chevron-${pubkey}`);
     if (row) {
         row.classList.toggle('open');
+        if (chevron) chevron.classList.toggle('open');
     }
 }
 
