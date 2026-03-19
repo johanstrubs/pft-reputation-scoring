@@ -193,6 +193,8 @@ class DataCollector:
                     s.metrics.server_state = result["server_state"]
                 if result.get("server_version"):
                     s.metrics.server_version = result["server_version"]
+                if result.get("server_domain") and not s.domain:
+                    s.domain = result["server_domain"]
                 # RPC validated_ledger.age is the most accurate ledger interval
                 if result.get("validated_ledger_age") is not None:
                     s.metrics.avg_ledger_interval = float(result["validated_ledger_age"])
@@ -417,6 +419,7 @@ class DataCollector:
                 "pubkey_node": info.get("pubkey_node"),
                 "pubkey_validator": info.get("pubkey_validator"),
                 "server_state": info.get("server_state"),
+                "server_domain": info.get("server_domain"),
                 "peers": info.get("peers"),
                 "uptime": info.get("uptime"),
                 "server_version": info.get("build_version"),
