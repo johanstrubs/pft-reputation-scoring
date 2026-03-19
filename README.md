@@ -65,4 +65,20 @@ location /api/ {
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
 }
+
+location /leaderboard {
+    proxy_pass http://127.0.0.1:8000/leaderboard;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+
+location /static/ {
+    proxy_pass http://127.0.0.1:8000/static/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
 ```
+
+### Leaderboard
+
+Public leaderboard at `https://dashboard.pftoligarchy.com/leaderboard` — ranks validators by composite reputation score with health indicators, metric breakdowns, and 7-day trend sparklines. Auto-refreshes every 5 minutes.

@@ -192,6 +192,34 @@ class Database:
                 for r in rows
             ]
 
+    async def get_all_validator_trends(self, hours: int = 168) -> dict[str, list[dict]]:
+        """Get composite score history for all validators over the given hours."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            max_rows = (hours * 3600) // settings.poll_interval_seconds
+            cursor = await db.execute(
+                """SELECT vs.public_key, vs.composite_score, vs.timestamp
+                   FROM validator_scores vs
+                   JOIN scoring_rounds sr ON vs.round_id = sr.id
+                   ORDER BY sr.id DESC
+                   LIMIT ?""",
+                (max_rows * 100,),  # rough upper bound: max_rows * max_validators
+            )
+            rows = await cursor.fetchall()
+            trends: dict[str, list[dict]] = {}
+            for r in rows:
+                pk = r["public_key"]
+                if pk not in trends:
+                    trends[pk] = []
+                trends[pk].append({
+                    "composite_score": r["composite_score"],
+                    "timestamp": r["timestamp"],
+                })
+            # Reverse each list so oldest is first (for sparklines)
+            for pk in trends:
+                trends[pk].reverse()
+            return trends
+
     async def get_last_round_timestamp(self) -> str | None:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(

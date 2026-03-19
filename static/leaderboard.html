@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post Fiat Validator Leaderboard</title>
+    <link rel="stylesheet" href="/static/leaderboard.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1f3c6;</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Post Fiat Validator Leaderboard</h1>
+            <div class="subtitle">Multi-Validator Reputation Scoring Engine</div>
+            <div class="last-updated" id="last-updated"></div>
+        </header>
+
+        <div id="error-banner" class="error-banner"></div>
+
+        <div class="summary-grid" id="summary"></div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            Loading validator scores...
+        </div>
+
+        <table class="leaderboard-table" id="leaderboard-table"></table>
+
+        <footer>
+            Data from <a href="/api/scores">/api/scores</a> |
+            <a href="/api/methodology">Scoring Methodology</a> |
+            Auto-refreshes every 5 minutes
+        </footer>
+    </div>
+
+    <script src="/static/leaderboard.js"></script>
+</body>
+</html>

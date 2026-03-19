@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.collector import DataCollector
@@ -106,6 +109,13 @@ async def get_validator_score(public_key: str):
     }
 
 
+@app.get("/api/scores/trends")
+async def get_trends(hours: int = 168):
+    """Get composite score trends for all validators (default 7 days)."""
+    trends = await db.get_all_validator_trends(hours=min(hours, 168))
+    return {"hours": hours, "trends": trends}
+
+
 @app.get("/api/methodology", response_model=MethodologyResponse)
 async def get_methodology():
     return MethodologyResponse(
@@ -133,3 +143,15 @@ async def get_methodology():
             "diversity": {"penalty_threshold": 0.30, "scoring": "penalty if >30% share same ASN"},
         },
     )
+
+
+# --- Static files & leaderboard ---
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
+
+
+@app.get("/leaderboard")
+async def leaderboard():
+    return FileResponse(os.path.join(STATIC_DIR, "leaderboard.html"))
+
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
