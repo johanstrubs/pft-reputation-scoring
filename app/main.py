@@ -90,6 +90,13 @@ async def get_history(limit: int = 10):
     return HistoryResponse(rounds=rounds)
 
 
+@app.get("/api/scores/trends")
+async def get_trends(hours: int = 168):
+    """Get composite score trends for all validators (default 7 days)."""
+    trends = await db.get_all_validator_trends(hours=min(hours, 168))
+    return {"hours": hours, "trends": trends}
+
+
 @app.get("/api/scores/{public_key}")
 async def get_validator_score(public_key: str):
     round_id, round_ts, scores = await db.get_latest_scores()
@@ -107,13 +114,6 @@ async def get_validator_score(public_key: str):
         "validator": validator.model_dump(),
         "history": history,
     }
-
-
-@app.get("/api/scores/trends")
-async def get_trends(hours: int = 168):
-    """Get composite score trends for all validators (default 7 days)."""
-    trends = await db.get_all_validator_trends(hours=min(hours, 168))
-    return {"hours": hours, "trends": trends}
 
 
 @app.get("/api/methodology", response_model=MethodologyResponse)
