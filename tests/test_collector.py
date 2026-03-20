@@ -4,23 +4,38 @@ from app.collector import DataCollector, NodeValidatorMap
 
 class TestParseAgreement:
     def test_dict_with_score_string(self):
-        result = DataCollector._parse_agreement({"missed": 0, "total": 100, "score": "0.9500", "incomplete": False})
-        assert abs(result - 0.95) < 0.001
+        score, total = DataCollector._parse_agreement({"missed": 0, "total": 100, "score": "0.9500", "incomplete": False})
+        assert abs(score - 0.95) < 0.001
+        assert total == 100
+
+    def test_dict_with_zero_total(self):
+        score, total = DataCollector._parse_agreement({"missed": 0, "total": 0, "score": "0.00000", "incomplete": False})
+        assert score == 0.0
+        assert total == 0
 
     def test_float_value(self):
-        assert DataCollector._parse_agreement(0.97) == 0.97
+        score, total = DataCollector._parse_agreement(0.97)
+        assert score == 0.97
+        assert total is None
 
     def test_int_value(self):
-        assert DataCollector._parse_agreement(1) == 1.0
+        score, total = DataCollector._parse_agreement(1)
+        assert score == 1.0
+        assert total is None
 
     def test_string_value(self):
-        assert DataCollector._parse_agreement("0.88") == 0.88
+        score, total = DataCollector._parse_agreement("0.88")
+        assert score == 0.88
+        assert total is None
 
     def test_none(self):
-        assert DataCollector._parse_agreement(None) is None
+        score, total = DataCollector._parse_agreement(None)
+        assert score is None
+        assert total is None
 
     def test_invalid_dict(self):
-        assert DataCollector._parse_agreement({"no_score": True}) is None
+        score, total = DataCollector._parse_agreement({"no_score": True})
+        assert score is None
 
 
 class TestNodeValidatorMap:

@@ -33,6 +33,7 @@ def mock_scores():
                 agreement_24h=0.90,
                 agreement_30d=0.85,
                 uptime=0.80,
+                poll_success=0.5,
                 latency=0.91,
                 peer_count=1.0,
                 version=1.0,

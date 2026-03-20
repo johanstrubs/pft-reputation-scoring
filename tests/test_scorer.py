@@ -20,8 +20,11 @@ def _make_snapshot(
         domain="test.example.com",
         metrics=ValidatorMetrics(
             agreement_1h=agreement_1h,
+            agreement_1h_total=1000,
             agreement_24h=agreement_24h,
+            agreement_24h_total=25000,
             agreement_30d=agreement_30d,
+            agreement_30d_total=800000,
             uptime_seconds=uptime,
             latency_ms=latency,
             peer_count=peer_count,
@@ -35,23 +38,52 @@ def _make_snapshot(
 class TestAgreementScoring:
     def test_perfect_agreement(self):
         scorer = ReputationScorer()
-        assert abs(scorer._score_agreement(1.0) - 1.0) < 1e-9
+        assert abs(scorer._score_agreement(1.0, total=1000) - 1.0) < 1e-9
 
     def test_threshold_agreement(self):
         scorer = ReputationScorer()
-        assert scorer._score_agreement(0.8) == 0.0
+        assert scorer._score_agreement(0.8, total=1000) == 0.0
 
     def test_below_threshold(self):
         scorer = ReputationScorer()
-        assert scorer._score_agreement(0.5) == 0.0
+        assert scorer._score_agreement(0.5, total=1000) == 0.0
 
     def test_mid_range(self):
         scorer = ReputationScorer()
-        assert abs(scorer._score_agreement(0.9) - 0.5) < 0.01
+        assert abs(scorer._score_agreement(0.9, total=1000) - 0.5) < 0.01
 
     def test_none(self):
         scorer = ReputationScorer()
         assert scorer._score_agreement(None) == 0.0
+
+    def test_total_zero_returns_neutral(self):
+        """VHS returns total=0 when 1h aggregation has no data — should be neutral."""
+        scorer = ReputationScorer()
+        assert scorer._score_agreement(0.0, total=0) == 0.5
+
+    def test_total_none_uses_score_only(self):
+        """When total is None (non-dict input), fall back to score-based logic."""
+        scorer = ReputationScorer()
+        assert scorer._score_agreement(0.0, total=None) == 0.0
+        assert abs(scorer._score_agreement(0.95, total=None) - 0.75) < 0.01
+
+
+class TestPollSuccessScoring:
+    def test_high_success(self):
+        assert ReputationScorer._score_poll_success(100.0) == 1.0
+
+    def test_threshold(self):
+        assert ReputationScorer._score_poll_success(95.0) == 1.0
+
+    def test_low_success(self):
+        assert ReputationScorer._score_poll_success(60.0) == 0.0
+
+    def test_mid_success(self):
+        score = ReputationScorer._score_poll_success(82.5)
+        assert 0.4 < score < 0.6
+
+    def test_none_returns_neutral(self):
+        assert ReputationScorer._score_poll_success(None) == 0.5
 
 
 class TestLatencyScoring:
@@ -98,7 +130,6 @@ class TestCompositeScoring:
         snap = _make_snapshot()
         results = scorer.score([snap])
         assert len(results) == 1
-        # Perfect validator should score very high
         assert results[0].composite_score > 80
 
     def test_multiple_validators_ranked(self):

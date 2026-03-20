@@ -4,8 +4,12 @@ from pydantic import BaseModel
 
 class ValidatorMetrics(BaseModel):
     agreement_1h: float | None = None
+    agreement_1h_total: int | None = None
     agreement_24h: float | None = None
+    agreement_24h_total: int | None = None
     agreement_30d: float | None = None
+    agreement_30d_total: int | None = None
+    poll_success_pct: float | None = None  # % of successful polls (our own tracking)
     uptime_seconds: int | None = None
     uptime_pct: float | None = None
     latency_ms: float | None = None
@@ -23,6 +27,7 @@ class ValidatorSubScores(BaseModel):
     agreement_24h: float = 0.0
     agreement_30d: float = 0.0
     uptime: float = 0.0
+    poll_success: float = 0.0
     latency: float = 0.0
     peer_count: float = 0.0
     version: float = 0.0

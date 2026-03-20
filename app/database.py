@@ -37,7 +37,9 @@ CREATE TABLE IF NOT EXISTS validator_scores (
     agreement_1h_score REAL,
     agreement_24h_score REAL,
     agreement_30d_score REAL,
+    poll_success_pct REAL,
     uptime_score REAL,
+    poll_success_score REAL,
     latency_score REAL,
     peer_count_score REAL,
     version_score REAL,
@@ -48,6 +50,19 @@ CREATE TABLE IF NOT EXISTS validator_scores (
 
 CREATE INDEX IF NOT EXISTS idx_validator_scores_pubkey ON validator_scores(public_key);
 CREATE INDEX IF NOT EXISTS idx_validator_scores_round ON validator_scores(round_id);
+
+CREATE TABLE IF NOT EXISTS poll_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    round_id INTEGER NOT NULL,
+    public_key TEXT NOT NULL,
+    poll_successful BOOLEAN NOT NULL,
+    latency_ms REAL,
+    timestamp TEXT NOT NULL,
+    FOREIGN KEY (round_id) REFERENCES scoring_rounds(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_poll_results_pubkey ON poll_results(public_key);
+CREATE INDEX IF NOT EXISTS idx_poll_results_round ON poll_results(round_id);
 """
 
 
@@ -81,22 +96,23 @@ class Database:
                     (round_id, public_key, domain, composite_score,
                      agreement_1h, agreement_24h, agreement_30d,
                      uptime_seconds, uptime_pct, latency_ms, peer_count,
-                     avg_ledger_interval,
+                     avg_ledger_interval, poll_success_pct,
                      server_version, server_state, asn, isp, country,
                      agreement_1h_score, agreement_24h_score, agreement_30d_score,
-                     uptime_score, latency_score, peer_count_score,
+                     uptime_score, poll_success_score, latency_score, peer_count_score,
                      version_score, diversity_score, timestamp)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         round_id, s.public_key, s.domain, s.composite_score,
                         s.metrics.agreement_1h, s.metrics.agreement_24h, s.metrics.agreement_30d,
                         s.metrics.uptime_seconds, s.metrics.uptime_pct,
                         s.metrics.latency_ms, s.metrics.peer_count,
-                        s.metrics.avg_ledger_interval,
+                        s.metrics.avg_ledger_interval, s.metrics.poll_success_pct,
                         s.metrics.server_version, s.metrics.server_state,
                         s.metrics.asn, s.metrics.isp, s.metrics.country,
                         s.sub_scores.agreement_1h, s.sub_scores.agreement_24h, s.sub_scores.agreement_30d,
-                        s.sub_scores.uptime, s.sub_scores.latency, s.sub_scores.peer_count,
+                        s.sub_scores.uptime, s.sub_scores.poll_success,
+                        s.sub_scores.latency, s.sub_scores.peer_count,
                         s.sub_scores.version, s.sub_scores.diversity, s.last_updated,
                     ),
                 )
@@ -138,6 +154,7 @@ class Database:
                         latency_ms=r["latency_ms"],
                         peer_count=r["peer_count"],
                         avg_ledger_interval=r["avg_ledger_interval"],
+                        poll_success_pct=r["poll_success_pct"],
                         server_version=r["server_version"],
                         server_state=r["server_state"],
                         asn=r["asn"],
@@ -149,6 +166,7 @@ class Database:
                         agreement_24h=r["agreement_24h_score"] or 0.0,
                         agreement_30d=r["agreement_30d_score"] or 0.0,
                         uptime=r["uptime_score"] or 0.0,
+                        poll_success=r["poll_success_score"] or 0.0,
                         latency=r["latency_score"] or 0.0,
                         peer_count=r["peer_count_score"] or 0.0,
                         version=r["version_score"] or 0.0,
@@ -219,6 +237,65 @@ class Database:
             for pk in trends:
                 trends[pk].reverse()
             return trends
+
+    async def store_poll_results(self, round_id: int, results: list[dict]):
+        """Store poll success/failure for each validator in a round."""
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            for r in results:
+                await db.execute(
+                    """INSERT INTO poll_results (round_id, public_key, poll_successful, latency_ms, timestamp)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (round_id, r["public_key"], r["successful"], r.get("latency_ms"), now),
+                )
+            await db.commit()
+
+    async def get_poll_success_pct(self, public_key: str, hours: int = 24) -> float | None:
+        """Compute % of successful polls in the last N hours for a validator."""
+        async with aiosqlite.connect(self.db_path) as db:
+            max_polls = (hours * 3600) // settings.poll_interval_seconds
+            cursor = await db.execute(
+                """SELECT COUNT(*) as total,
+                          SUM(CASE WHEN poll_successful THEN 1 ELSE 0 END) as successes
+                   FROM (
+                       SELECT poll_successful FROM poll_results
+                       WHERE public_key = ?
+                       ORDER BY id DESC
+                       LIMIT ?
+                   )""",
+                (public_key, max_polls),
+            )
+            row = await cursor.fetchone()
+            if not row or row[0] == 0:
+                return None
+            return round(100.0 * row[1] / row[0], 2)
+
+    async def get_all_poll_success_pcts(self, hours: int = 24) -> dict[str, float]:
+        """Compute poll success % for all validators in one query."""
+        async with aiosqlite.connect(self.db_path) as db:
+            max_polls = (hours * 3600) // settings.poll_interval_seconds
+            # Get the cutoff round_id
+            cursor = await db.execute(
+                "SELECT id FROM scoring_rounds ORDER BY id DESC LIMIT 1 OFFSET ?",
+                (max_polls,),
+            )
+            row = await cursor.fetchone()
+            min_round_id = row[0] if row else 0
+
+            cursor = await db.execute(
+                """SELECT public_key,
+                          COUNT(*) as total,
+                          SUM(CASE WHEN poll_successful THEN 1 ELSE 0 END) as successes
+                   FROM poll_results
+                   WHERE round_id > ?
+                   GROUP BY public_key""",
+                (min_round_id,),
+            )
+            rows = await cursor.fetchall()
+            return {
+                r[0]: round(100.0 * r[2] / r[1], 2)
+                for r in rows if r[1] > 0
+            }
 
     async def get_last_round_timestamp(self) -> str | None:
         async with aiosqlite.connect(self.db_path) as db:

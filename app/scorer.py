@@ -11,7 +11,8 @@ WEIGHTS = {
     "agreement_1h": 0.10,
     "agreement_24h": 0.15,
     "agreement_30d": 0.20,
-    "uptime": 0.15,
+    "uptime": 0.08,
+    "poll_success": 0.07,
     "latency": 0.10,
     "peer_count": 0.10,
     "version": 0.10,
@@ -44,10 +45,11 @@ class ReputationScorer:
 
         for snap in snapshots:
             sub = ValidatorSubScores(
-                agreement_1h=self._score_agreement(snap.metrics.agreement_1h),
-                agreement_24h=self._score_agreement(snap.metrics.agreement_24h),
-                agreement_30d=self._score_agreement(snap.metrics.agreement_30d),
+                agreement_1h=self._score_agreement(snap.metrics.agreement_1h, snap.metrics.agreement_1h_total),
+                agreement_24h=self._score_agreement(snap.metrics.agreement_24h, snap.metrics.agreement_24h_total),
+                agreement_30d=self._score_agreement(snap.metrics.agreement_30d, snap.metrics.agreement_30d_total),
                 uptime=self._score_uptime(snap.metrics.uptime_seconds, max_uptime),
+                poll_success=self._score_poll_success(snap.metrics.poll_success_pct),
                 latency=self._score_latency(snap.metrics.latency_ms),
                 peer_count=self._score_peer_count(snap.metrics.peer_count),
                 version=self._score_version(snap.metrics.server_version, latest_version),
@@ -59,6 +61,7 @@ class ReputationScorer:
                 + sub.agreement_24h * WEIGHTS["agreement_24h"]
                 + sub.agreement_30d * WEIGHTS["agreement_30d"]
                 + sub.uptime * WEIGHTS["uptime"]
+                + sub.poll_success * WEIGHTS["poll_success"]
                 + sub.latency * WEIGHTS["latency"]
                 + sub.peer_count * WEIGHTS["peer_count"]
                 + sub.version * WEIGHTS["version"]
@@ -85,13 +88,25 @@ class ReputationScorer:
         return results
 
     @staticmethod
-    def _score_agreement(value: float | None) -> float:
+    def _score_agreement(value: float | None, total: int | None = None) -> float:
         if value is None:
             return 0.0
+        if total is not None and total == 0:
+            return 0.5  # No data in this window (e.g. VHS 1h aggregation gap) — neutral
         if value < 0.8:
             return 0.0
         # Linear from 0.8 -> 0.0 to 1.0 -> 1.0
         return min(1.0, max(0.0, (value - 0.8) / 0.2))
+
+    @staticmethod
+    def _score_poll_success(pct: float | None) -> float:
+        if pct is None:
+            return 0.5  # No poll history yet — neutral
+        if pct >= 95.0:
+            return 1.0
+        if pct < 70.0:
+            return 0.0
+        return (pct - 70.0) / 25.0
 
     @staticmethod
     def _score_uptime(seconds: int | None, max_uptime: int) -> float:

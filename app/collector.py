@@ -60,8 +60,14 @@ class DataCollector:
         if settings.key_mapping_pairs:
             logger.info("Loaded %d manual key mappings from config", len(settings.key_mapping_pairs))
 
-    async def collect(self) -> list[ValidatorSnapshot]:
+    async def collect(self) -> tuple[list[ValidatorSnapshot], list[dict]]:
+        """Collect validator data. Returns (snapshots, poll_results).
+
+        poll_results is a list of {public_key, successful, latency_ms} dicts
+        tracking whether each validator was reachable this round.
+        """
         snapshots: dict[str, ValidatorSnapshot] = {}
+        poll_results: list[dict] = []
 
         # Fetch VHS data and direct RPC data concurrently
         vhs_validators, vhs_topology, rpc_results = await asyncio.gather(
@@ -79,14 +85,20 @@ class DataCollector:
                 signing = v.get("signing_key")
                 if not master:
                     continue
+                a1h_score, a1h_total = self._parse_agreement(v.get("agreement_1h"))
+                a24h_score, a24h_total = self._parse_agreement(v.get("agreement_24h"))
+                a30d_score, a30d_total = self._parse_agreement(v.get("agreement_30day") or v.get("agreement_30d"))
                 snapshots[master] = ValidatorSnapshot(
                     public_key=master,
                     domain=v.get("domain"),
                     unl=bool(v.get("unl")),
                     metrics=ValidatorMetrics(
-                        agreement_1h=self._parse_agreement(v.get("agreement_1h")),
-                        agreement_24h=self._parse_agreement(v.get("agreement_24h")),
-                        agreement_30d=self._parse_agreement(v.get("agreement_30day") or v.get("agreement_30d")),
+                        agreement_1h=a1h_score,
+                        agreement_1h_total=a1h_total,
+                        agreement_24h=a24h_score,
+                        agreement_24h_total=a24h_total,
+                        agreement_30d=a30d_score,
+                        agreement_30d_total=a30d_total,
                         server_version=v.get("server_version"),
                     ),
                 )
@@ -207,7 +219,40 @@ class DataCollector:
         # ASN lookup for validators with known IPs
         await self._enrich_asn(snapshots, ip_by_master)
 
-        return list(snapshots.values())
+        # Build poll results: every VHS validator was "seen" (VHS responded),
+        # and RPC-queried nodes have direct reachability data
+        vhs_keys = set()
+        if isinstance(vhs_validators, list):
+            for v in vhs_validators:
+                master = v.get("master_key") or v.get("validation_public_key")
+                if master:
+                    vhs_keys.add(master)
+                    poll_results.append({
+                        "public_key": master,
+                        "successful": True,  # VHS reported this validator
+                        "latency_ms": None,
+                    })
+
+        # RPC-queried nodes: successful if we got a response
+        if isinstance(rpc_results, list):
+            rpc_seen = set()
+            for result in rpc_results:
+                if not result:
+                    continue
+                node_key = result.get("pubkey_node")
+                if not node_key:
+                    continue
+                master = self._node_map.get_master_key(node_key)
+                key = master or node_key
+                if key not in vhs_keys and key not in rpc_seen:
+                    rpc_seen.add(key)
+                    poll_results.append({
+                        "public_key": key,
+                        "successful": True,
+                        "latency_ms": result.get("latency_ms"),
+                    })
+
+        return list(snapshots.values()), poll_results
 
     async def _probe_topology_nodes(
         self,
@@ -506,21 +551,30 @@ class DataCollector:
         return None
 
     @staticmethod
-    def _parse_agreement(agreement_obj) -> float | None:
+    def _parse_agreement(agreement_obj) -> tuple[float | None, int | None]:
+        """Parse a VHS agreement object, returning (score, total_validations).
+
+        The total is needed to distinguish "no data in window" (total=0)
+        from "bad performance" (total>0, score<0.8). The VHS 1h window
+        has been known to return total=0 for all validators when the
+        aggregation is broken.
+        """
         if agreement_obj is None:
-            return None
+            return None, None
         if isinstance(agreement_obj, (int, float)):
-            return float(agreement_obj)
+            return float(agreement_obj), None
         if isinstance(agreement_obj, dict):
+            total = agreement_obj.get("total")
             score = agreement_obj.get("score")
             if score is not None:
                 try:
-                    return float(score)
+                    return float(score), total
                 except (ValueError, TypeError):
-                    return None
+                    return None, total
+            return None, total
         if isinstance(agreement_obj, str):
             try:
-                return float(agreement_obj)
+                return float(agreement_obj), None
             except ValueError:
-                return None
-        return None
+                return None, None
+        return None, None
