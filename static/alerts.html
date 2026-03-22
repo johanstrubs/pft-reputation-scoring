@@ -110,8 +110,16 @@
         <div class="card report-preview">
             <h2>Example Daily Report Card</h2>
             <p style="color: #8b949e; margin-bottom: 12px;">Here's what a real daily report looks like in Discord:</p>
-            <img id="report-screenshot" src="/static/report-example.png" alt="Example daily report card in Discord"
-                 onerror="this.parentElement.innerHTML += '<p style=color:#8b949e>Screenshot will be added after the first daily report is generated.</p>'; this.style.display='none';">
+            <div id="screenshot-container">
+                <img id="report-screenshot" src="/static/report-example.png" alt="Example daily report card in Discord"
+                     style="display:none;" onload="this.style.display='block';">
+                <p id="screenshot-placeholder" style="color: #8b949e; font-style: italic;">Screenshot will be added after the first daily report is generated.</p>
+            </div>
+            <script>
+                document.getElementById('report-screenshot').addEventListener('load', function() {
+                    document.getElementById('screenshot-placeholder').style.display = 'none';
+                });
+            </script>
         </div>
     </div>
 
