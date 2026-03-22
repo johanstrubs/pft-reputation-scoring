@@ -4,10 +4,11 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from app.config import settings
 from app.collector import DataCollector
@@ -145,6 +146,67 @@ async def get_methodology():
             "diversity": {"penalty_threshold": 0.30, "scoring": "penalty if >30% share same ASN"},
         },
     )
+
+
+# --- Alerts & Subscriptions ---
+
+
+class SubscribeRequest(BaseModel):
+    public_key: str
+    webhook_url: str
+
+
+class UnsubscribeRequest(BaseModel):
+    public_key: str
+
+
+@app.get("/alerts")
+async def alerts_page():
+    return FileResponse(os.path.join(STATIC_DIR, "alerts.html"))
+
+
+@app.post("/api/alerts/subscribe")
+async def subscribe(req: SubscribeRequest):
+    from app.alerts import send_confirmation
+
+    if not req.public_key or len(req.public_key) < 10:
+        raise HTTPException(status_code=400, detail="Invalid public key")
+    if not req.webhook_url.startswith("https://discord.com/api/webhooks/"):
+        raise HTTPException(status_code=400, detail="Invalid Discord webhook URL")
+
+    is_new = await db.add_subscription(req.public_key, req.webhook_url)
+    if not is_new:
+        raise HTTPException(status_code=409, detail="Already subscribed with this key and webhook")
+
+    sent = await send_confirmation(req.webhook_url, req.public_key)
+    if not sent:
+        raise HTTPException(status_code=502, detail="Subscription saved but failed to send confirmation to Discord. Check your webhook URL.")
+
+    return {"message": "Subscribed! A confirmation message was sent to your Discord channel.", "public_key": req.public_key}
+
+
+@app.get("/api/alerts/status/{public_key}")
+async def subscription_status(public_key: str):
+    sub = await db.get_subscription(public_key)
+    if not sub:
+        raise HTTPException(status_code=404, detail="No subscription found")
+    return {"subscription": sub}
+
+
+@app.post("/api/alerts/unsubscribe")
+async def unsubscribe(req: UnsubscribeRequest):
+    removed = await db.unsubscribe(req.public_key)
+    if not removed:
+        raise HTTPException(status_code=404, detail="No active subscription found for this key")
+    return {"message": "Unsubscribed successfully."}
+
+
+@app.post("/api/alerts/send-daily")
+async def trigger_daily_reports():
+    """Manual trigger for daily reports (for testing)."""
+    from app.alerts import send_daily_reports
+    await send_daily_reports(db)
+    return {"message": "Daily reports sent."}
 
 
 # --- Static files & leaderboard ---

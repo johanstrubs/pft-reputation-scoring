@@ -63,6 +63,23 @@ CREATE TABLE IF NOT EXISTS poll_results (
 
 CREATE INDEX IF NOT EXISTS idx_poll_results_pubkey ON poll_results(public_key);
 CREATE INDEX IF NOT EXISTS idx_poll_results_round ON poll_results(round_id);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_key TEXT NOT NULL,
+    webhook_url TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    active BOOLEAN DEFAULT 1,
+    UNIQUE(public_key, webhook_url)
+);
+
+CREATE TABLE IF NOT EXISTS alert_cooldowns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_key TEXT NOT NULL,
+    alert_type TEXT NOT NULL,
+    fired_at TEXT NOT NULL,
+    UNIQUE(public_key, alert_type)
+);
 """
 
 
@@ -296,6 +313,167 @@ class Database:
                 r[0]: round(100.0 * r[2] / r[1], 2)
                 for r in rows if r[1] > 0
             }
+
+    # --- Subscription methods ---
+
+    async def add_subscription(self, public_key: str, webhook_url: str) -> bool:
+        """Add a subscription. Returns True if new, False if already exists."""
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            try:
+                await db.execute(
+                    "INSERT INTO subscriptions (public_key, webhook_url, created_at) VALUES (?, ?, ?)",
+                    (public_key, webhook_url, now),
+                )
+                await db.commit()
+                return True
+            except Exception:
+                # UNIQUE constraint — already subscribed
+                return False
+
+    async def get_active_subscriptions(self) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT public_key, webhook_url FROM subscriptions WHERE active = 1"
+            )
+            rows = await cursor.fetchall()
+            return [{"public_key": r["public_key"], "webhook_url": r["webhook_url"]} for r in rows]
+
+    async def get_subscription(self, public_key: str) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT public_key, webhook_url, created_at, active FROM subscriptions WHERE public_key = ?",
+                (public_key,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return {"public_key": row["public_key"], "webhook_url": row["webhook_url"],
+                    "created_at": row["created_at"], "active": bool(row["active"])}
+
+    async def unsubscribe(self, public_key: str) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE subscriptions SET active = 0 WHERE public_key = ? AND active = 1",
+                (public_key,),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_previous_scores(self, public_key: str) -> dict | None:
+        """Get the validator's score from ~24h ago for delta calculation."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            target_rounds = (24 * 3600) // settings.poll_interval_seconds
+            cursor = await db.execute(
+                """SELECT composite_score, timestamp FROM validator_scores
+                   WHERE public_key = ?
+                   ORDER BY id DESC
+                   LIMIT 1 OFFSET ?""",
+                (public_key, target_rounds),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return {"composite_score": row["composite_score"], "timestamp": row["timestamp"]}
+
+    async def get_previous_rank(self, public_key: str) -> int | None:
+        """Get the validator's rank from ~24h ago."""
+        async with aiosqlite.connect(self.db_path) as db:
+            target_rounds = (24 * 3600) // settings.poll_interval_seconds
+            cursor = await db.execute(
+                "SELECT id FROM scoring_rounds ORDER BY id DESC LIMIT 1 OFFSET ?",
+                (target_rounds,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            old_round_id = row[0]
+            cursor = await db.execute(
+                "SELECT public_key FROM validator_scores WHERE round_id = ? ORDER BY composite_score DESC",
+                (old_round_id,),
+            )
+            rows = await cursor.fetchall()
+            for i, r in enumerate(rows):
+                if r[0] == public_key:
+                    return i + 1
+            return None
+
+    async def check_alert_cooldown(self, public_key: str, alert_type: str, hours: int = 6) -> bool:
+        """Returns True if alert is on cooldown (was fired recently)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT fired_at FROM alert_cooldowns WHERE public_key = ? AND alert_type = ?",
+                (public_key, alert_type),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return False
+            fired_at = datetime.fromisoformat(row[0])
+            elapsed = (datetime.now(timezone.utc) - fired_at).total_seconds()
+            return elapsed < hours * 3600
+
+    async def set_alert_cooldown(self, public_key: str, alert_type: str):
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO alert_cooldowns (public_key, alert_type, fired_at) VALUES (?, ?, ?)
+                   ON CONFLICT(public_key, alert_type) DO UPDATE SET fired_at = ?""",
+                (public_key, alert_type, now, now),
+            )
+            await db.commit()
+
+    async def get_top_movers(self) -> dict:
+        """Get biggest rank gainers and losers in last 24h."""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Get latest round scores
+            cursor = await db.execute("SELECT id FROM scoring_rounds ORDER BY id DESC LIMIT 1")
+            row = await cursor.fetchone()
+            if not row:
+                return {"gainer": None, "loser": None}
+            latest_round = row[0]
+
+            # Get round from ~24h ago
+            target_offset = (24 * 3600) // settings.poll_interval_seconds
+            cursor = await db.execute(
+                "SELECT id FROM scoring_rounds ORDER BY id DESC LIMIT 1 OFFSET ?",
+                (target_offset,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return {"gainer": None, "loser": None}
+            old_round = row[0]
+
+            # Get rankings for both rounds
+            async def get_rankings(round_id):
+                cursor = await db.execute(
+                    "SELECT public_key, domain, composite_score FROM validator_scores WHERE round_id = ? ORDER BY composite_score DESC",
+                    (round_id,),
+                )
+                rows = await cursor.fetchall()
+                return {r[0]: {"rank": i + 1, "domain": r[1], "score": r[2]} for i, r in enumerate(rows)}
+
+            old_ranks = await get_rankings(old_round)
+            new_ranks = await get_rankings(latest_round)
+
+            best_gain = 0
+            best_gainer = None
+            worst_loss = 0
+            worst_loser = None
+
+            for pk, new_data in new_ranks.items():
+                if pk in old_ranks:
+                    rank_change = old_ranks[pk]["rank"] - new_data["rank"]  # positive = improved
+                    if rank_change > best_gain:
+                        best_gain = rank_change
+                        best_gainer = {"public_key": pk, "domain": new_data["domain"], "rank_change": rank_change, "score": new_data["score"]}
+                    if rank_change < worst_loss:
+                        worst_loss = rank_change
+                        worst_loser = {"public_key": pk, "domain": new_data["domain"], "rank_change": rank_change, "score": new_data["score"]}
+
+            return {"gainer": best_gainer, "loser": worst_loser}
 
     async def get_last_round_timestamp(self) -> str | None:
         async with aiosqlite.connect(self.db_path) as db:
