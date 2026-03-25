@@ -154,10 +154,15 @@ async def get_methodology():
 class SubscribeRequest(BaseModel):
     public_key: str
     webhook_url: str
+    node_public_key: str | None = None
 
 
 class UnsubscribeRequest(BaseModel):
     public_key: str
+
+
+class UpdateNodeKeyRequest(BaseModel):
+    node_public_key: str
 
 
 @app.get("/alerts")
@@ -173,8 +178,10 @@ async def subscribe(req: SubscribeRequest):
         raise HTTPException(status_code=400, detail="Invalid public key")
     if not req.webhook_url.startswith("https://discord.com/api/webhooks/"):
         raise HTTPException(status_code=400, detail="Invalid Discord webhook URL")
+    if req.node_public_key and not req.node_public_key.startswith("n9"):
+        raise HTTPException(status_code=400, detail="Invalid node key format. Must start with n9...")
 
-    is_new = await db.add_subscription(req.public_key, req.webhook_url)
+    is_new = await db.add_subscription(req.public_key, req.webhook_url, req.node_public_key)
     if not is_new:
         raise HTTPException(status_code=409, detail="Already subscribed with this key and webhook")
 
@@ -201,12 +208,108 @@ async def unsubscribe(req: UnsubscribeRequest):
     return {"message": "Unsubscribed successfully."}
 
 
+@app.patch("/api/alerts/subscriptions/{public_key}")
+async def update_subscription(public_key: str, req: UpdateNodeKeyRequest):
+    """Update the node key for an existing subscription."""
+    if not req.node_public_key.startswith("n9"):
+        raise HTTPException(status_code=400, detail="Invalid node key format. Must start with n9...")
+    updated = await db.update_node_key(public_key, req.node_public_key)
+    if not updated:
+        raise HTTPException(status_code=404, detail="No active subscription found for this key")
+    return {"message": "Node key updated! Full metrics will be available after the next scoring round."}
+
+
 @app.post("/api/alerts/send-daily")
 async def trigger_daily_reports():
     """Manual trigger for daily reports (for testing)."""
     from app.alerts import send_daily_reports
     await send_daily_reports(db)
     return {"message": "Daily reports sent."}
+
+
+# --- Network Topology ---
+
+
+@app.get("/api/network/topology")
+async def network_topology():
+    """Public network topology API showing enrichment coverage and concentration."""
+    round_id, round_ts, scores = await db.get_latest_scores()
+    if not scores:
+        raise HTTPException(status_code=503, detail="No scoring data available yet")
+
+    total = len(scores)
+    enriched = [s for s in scores if s.metrics.asn is not None or s.metrics.country is not None]
+    unenriched = [s for s in scores if s.metrics.asn is None and s.metrics.country is None]
+
+    # Build validator list
+    validators = []
+    for s in scores:
+        validators.append({
+            "public_key": s.public_key,
+            "domain": s.domain,
+            "enriched": s.metrics.asn is not None or s.metrics.country is not None,
+            "asn": s.metrics.asn,
+            "isp": s.metrics.isp,
+            "country": s.metrics.country,
+            "latency_ms": s.metrics.latency_ms,
+            "uptime_seconds": s.metrics.uptime_seconds,
+            "peer_count": s.metrics.peer_count,
+        })
+
+    # Concentration stats (only from enriched validators)
+    enriched_count = len(enriched)
+    from collections import Counter
+
+    asn_counts = Counter((s.metrics.asn, s.metrics.isp) for s in enriched if s.metrics.asn is not None)
+    country_counts = Counter(s.metrics.country for s in enriched if s.metrics.country is not None)
+    provider_counts = Counter(s.metrics.isp for s in enriched if s.metrics.isp is not None)
+
+    by_asn = [
+        {"asn": asn, "isp": isp or "Unknown", "count": count, "pct": round(100 * count / enriched_count, 1) if enriched_count else 0}
+        for (asn, isp), count in asn_counts.most_common()
+    ]
+    by_country = [
+        {"country": country, "count": count, "pct": round(100 * count / enriched_count, 1) if enriched_count else 0}
+        for country, count in country_counts.most_common()
+    ]
+    by_provider = [
+        {"provider": provider, "count": count, "pct": round(100 * count / enriched_count, 1) if enriched_count else 0}
+        for provider, count in provider_counts.most_common()
+    ]
+
+    # Concentration warnings
+    warnings = []
+    for entry in by_provider:
+        if entry["pct"] > 33:
+            warnings.append(f"{entry['provider']} hosts {entry['pct']}% of enriched validators (threshold: 33%)")
+    for entry in by_country:
+        if entry["pct"] > 33:
+            warnings.append(f"{entry['pct']}% of enriched validators are in {entry['country']} (threshold: 33%)")
+    for entry in by_asn:
+        if entry["pct"] > 33:
+            warnings.append(f"ASN {entry['asn']} ({entry['isp']}) has {entry['pct']}% of enriched validators (threshold: 33%)")
+
+    return {
+        "timestamp": round_ts,
+        "enrichment_coverage": {
+            "total_validators": total,
+            "enriched": enriched_count,
+            "unenriched": len(unenriched),
+            "coverage_pct": round(100 * enriched_count / total, 1) if total else 0,
+        },
+        "concentration": {
+            "by_asn": by_asn,
+            "by_country": by_country,
+            "by_provider": by_provider,
+        },
+        "warnings": warnings,
+        "validators": validators,
+    }
+
+
+@app.get("/network")
+async def network_page():
+    return FileResponse(os.path.join(STATIC_DIR, "network.html"))
 
 
 # --- Static files & leaderboard ---

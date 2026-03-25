@@ -23,6 +23,7 @@
         .status { margin-top: 12px; padding: 12px; border-radius: 6px; display: none; }
         .status.success { display: block; background: #0d2818; border: 1px solid #238636; color: #3fb950; }
         .status.error { display: block; background: #2d1117; border: 1px solid #f85149; color: #f85149; }
+        .status.info { display: block; background: #0d1117; border: 1px solid #58a6ff; color: #58a6ff; }
         .guide-steps { counter-reset: step; padding-left: 0; list-style: none; }
         .guide-steps li { counter-increment: step; margin-bottom: 12px; padding-left: 32px; position: relative; color: #8b949e; line-height: 1.5; }
         .guide-steps li::before { content: counter(step); position: absolute; left: 0; width: 22px; height: 22px; background: #21262d; border-radius: 50%; text-align: center; line-height: 22px; font-size: 0.8em; color: #58a6ff; font-weight: 600; }
@@ -37,6 +38,27 @@
         .manage-link { text-align: center; margin-top: 16px; }
         .manage-link a { color: #58a6ff; text-decoration: none; font-size: 0.9em; }
         .manage-link a:hover { text-decoration: underline; }
+        /* Upgrade prompt */
+        .upgrade-prompt { background: #0d1117; border: 2px solid #f0883e; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .upgrade-prompt .upgrade-title { color: #f0883e; font-weight: 700; font-size: 1em; margin-bottom: 8px; }
+        .upgrade-prompt .upgrade-body { color: #c9d1d9; font-size: 0.9em; line-height: 1.5; }
+        /* Code block with copy button */
+        .code-block { position: relative; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px 48px 12px 12px; margin: 8px 0 12px 0; overflow-x: auto; }
+        .code-block code { background: none; padding: 0; font-size: 0.85em; white-space: pre; display: block; color: #79c0ff; }
+        .copy-btn { position: absolute; top: 8px; right: 8px; background: #21262d; border: 1px solid #30363d; color: #8b949e; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 0.75em; }
+        .copy-btn:hover { background: #30363d; color: #c9d1d9; }
+        .copy-btn.copied { color: #3fb950; border-color: #238636; }
+        /* Collapsible tutorial */
+        .tutorial-toggle { background: none; border: 1px solid #30363d; color: #58a6ff; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 0.95em; font-weight: 500; width: 100%; text-align: left; margin-bottom: 12px; }
+        .tutorial-toggle:hover { background: #161b22; }
+        .tutorial-content { display: none; }
+        .tutorial-content.open { display: block; }
+        .reassurance { background: #0d2818; border: 1px solid #238636; border-radius: 6px; padding: 12px; margin-top: 12px; color: #8b949e; font-size: 0.85em; line-height: 1.5; }
+        .reassurance strong { color: #3fb950; }
+        /* Nav links */
+        .nav-links { margin-bottom: 24px; }
+        .nav-links a { color: #58a6ff; text-decoration: none; font-size: 0.9em; margin-right: 16px; }
+        .nav-links a:hover { text-decoration: underline; }
         @media (max-width: 480px) {
             .features { grid-template-columns: 1fr; }
             h1 { font-size: 1.4em; }
@@ -45,6 +67,11 @@
 </head>
 <body>
     <div class="container">
+        <div class="nav-links">
+            <a href="/leaderboard">Leaderboard</a>
+            <a href="/network">Network Diversity Map</a>
+        </div>
+
         <h1>Validator Alerts & Daily Report Cards</h1>
         <p class="subtitle">Get daily scorecards and critical alerts for your Post Fiat validator via Discord.</p>
 
@@ -77,10 +104,59 @@
         <div class="card" id="subscribe-card">
             <h2>Subscribe</h2>
             <form id="subscribe-form" onsubmit="return handleSubscribe(event)">
-                <label for="public_key">Validator Public Key</label>
+                <label for="public_key">Validator Public Key <span style="color:#f85149">*</span></label>
                 <input type="text" id="public_key" name="public_key" placeholder="nHD3sPmh..." required>
 
-                <label for="webhook_url">Discord Webhook URL</label>
+                <!-- Node Key Upgrade Prompt -->
+                <div class="upgrade-prompt">
+                    <div class="upgrade-title">🔓 Unlock Full Metrics</div>
+                    <div class="upgrade-body">
+                        Without your node key, your report card covers agreement scores and version — about 45% of the full picture.
+                        <strong>With it</strong>, you get latency, uptime, peer count, and geographic diversity scoring.
+                        Your composite score becomes more accurate, and you help improve the
+                        <a href="/network" style="color:#58a6ff">network diversity map</a> for the whole community.
+                    </div>
+                </div>
+
+                <label for="node_public_key">Node Public Key <span style="color:#8b949e">(optional — unlocks full metrics)</span></label>
+                <input type="text" id="node_public_key" name="node_public_key" placeholder="n9KbsDV8xeD9XaKZx...">
+
+                <button type="button" class="tutorial-toggle" onclick="toggleTutorial()">
+                    📖 How to find your node key ▾
+                </button>
+                <div id="tutorial-content" class="tutorial-content">
+                    <ol class="guide-steps">
+                        <li>SSH into your validator server:
+                            <div class="code-block">
+                                <code>ssh root@YOUR_SERVER_IP</code>
+                                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            </div>
+                        </li>
+                        <li>Run this command to get your node key:
+                            <div class="code-block">
+                                <code>docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"server_info","params":[{}]}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
+                                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            </div>
+                        </li>
+                        <li>Copy the output — it starts with <code>n9</code> and looks like:
+                            <div class="code-block">
+                                <code>n9KbsDV8xeD9XaKZxEasvGMFGdhmH3bBaSBmFvDzVZQzBVfAWcFv</code>
+                                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            </div>
+                        </li>
+                        <li>Paste it into the <strong>Node Public Key</strong> field above.</li>
+                    </ol>
+                    <div class="reassurance">
+                        <strong>Is this safe?</strong> Your node key is your node's network identity — it's not secret.
+                        It's visible to every peer your node connects to. Sharing it here just lets us link your
+                        topology data (IP, latency, uptime) to your validator scores for a more accurate composite score.
+                    </div>
+                </div>
+
+                <label for="webhook_url">Discord Webhook URL <span style="color:#f85149">*</span></label>
                 <input type="text" id="webhook_url" name="webhook_url" placeholder="https://discord.com/api/webhooks/..." required>
 
                 <button type="submit" id="submit-btn">Subscribe & Send Test Message</button>
@@ -88,7 +164,8 @@
             <div id="status" class="status"></div>
             <div class="manage-link">
                 <a href="#" onclick="showCheckStatus(); return false;">Check subscription status</a> &middot;
-                <a href="#" onclick="showUnsubscribe(); return false;">Unsubscribe</a>
+                <a href="#" onclick="showUnsubscribe(); return false;">Unsubscribe</a> &middot;
+                <a href="#" onclick="showUpdateNodeKey(); return false;">Update node key</a>
             </div>
         </div>
 
@@ -124,16 +201,36 @@
     </div>
 
     <script>
+        function toggleTutorial() {
+            const el = document.getElementById('tutorial-content');
+            el.classList.toggle('open');
+        }
+
+        function copyCode(btn) {
+            const code = btn.previousElementSibling.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+            });
+        }
+
         async function handleSubscribe(e) {
             e.preventDefault();
             const btn = document.getElementById('submit-btn');
             const status = document.getElementById('status');
             const pk = document.getElementById('public_key').value.trim();
+            const nodeKey = document.getElementById('node_public_key').value.trim();
             const webhook = document.getElementById('webhook_url').value.trim();
 
-            if (!pk.startsWith('nH') && !pk.startsWith('n9')) {
+            if (!pk.startsWith('nH')) {
                 status.className = 'status error';
-                status.textContent = 'Invalid public key format. Keys start with nH... or n9...';
+                status.textContent = 'Invalid validator public key. Must start with nH...';
+                return false;
+            }
+            if (nodeKey && !nodeKey.startsWith('n9')) {
+                status.className = 'status error';
+                status.textContent = 'Invalid node key format. Node keys start with n9...';
                 return false;
             }
             if (!webhook.startsWith('https://discord.com/api/webhooks/')) {
@@ -148,10 +245,12 @@
             status.style.display = 'none';
 
             try {
+                const body = {public_key: pk, webhook_url: webhook};
+                if (nodeKey) body.node_public_key = nodeKey;
                 const resp = await fetch('/api/alerts/subscribe', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({public_key: pk, webhook_url: webhook}),
+                    body: JSON.stringify(body),
                 });
                 const data = await resp.json();
                 if (resp.ok) {
@@ -178,7 +277,13 @@
                 const resp = await fetch('/api/alerts/status/' + encodeURIComponent(pk));
                 const data = await resp.json();
                 if (resp.ok && data.subscription) {
-                    alert('Status: ' + (data.subscription.active ? 'Active' : 'Inactive') + '\nSubscribed since: ' + data.subscription.created_at);
+                    const s = data.subscription;
+                    const nodeStatus = s.node_public_key
+                        ? '✅ Full metrics active (node key: ' + s.node_public_key.substring(0, 12) + '...)'
+                        : '⚠️ Basic metrics only — add your node key for full scoring';
+                    alert('Status: ' + (s.active ? 'Active' : 'Inactive') +
+                          '\n' + nodeStatus +
+                          '\nSubscribed since: ' + s.created_at);
                 } else {
                     alert('No subscription found for this key.');
                 }
@@ -198,6 +303,23 @@
                 const data = await resp.json();
                 alert(data.message || (resp.ok ? 'Unsubscribed.' : 'Not found.'));
             } catch { alert('Error unsubscribing.'); }
+        }
+
+        async function showUpdateNodeKey() {
+            const pk = prompt('Enter your validator public key:');
+            if (!pk) return;
+            const nodeKey = prompt('Enter your node public key (starts with n9...):');
+            if (!nodeKey) return;
+            if (!nodeKey.startsWith('n9')) { alert('Node keys start with n9...'); return; }
+            try {
+                const resp = await fetch('/api/alerts/subscriptions/' + encodeURIComponent(pk), {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({node_public_key: nodeKey}),
+                });
+                const data = await resp.json();
+                alert(data.message || (resp.ok ? 'Node key updated!' : 'Failed.'));
+            } catch { alert('Error updating node key.'); }
         }
     </script>
 </body>

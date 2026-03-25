@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     public_key TEXT NOT NULL,
     webhook_url TEXT NOT NULL,
+    node_public_key TEXT,
     created_at TEXT NOT NULL,
     active BOOLEAN DEFAULT 1,
     UNIQUE(public_key, webhook_url)
@@ -91,6 +92,11 @@ class Database:
     async def init(self):
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA)
+            # Non-destructive migration: add node_public_key if missing
+            try:
+                await db.execute("ALTER TABLE subscriptions ADD COLUMN node_public_key TEXT")
+            except Exception:
+                pass  # Column already exists
             await db.commit()
 
     async def store_round(self, scores: list[ValidatorScore]) -> int:
@@ -316,14 +322,14 @@ class Database:
 
     # --- Subscription methods ---
 
-    async def add_subscription(self, public_key: str, webhook_url: str) -> bool:
+    async def add_subscription(self, public_key: str, webhook_url: str, node_public_key: str | None = None) -> bool:
         """Add a subscription. Returns True if new, False if already exists."""
         now = datetime.now(timezone.utc).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             try:
                 await db.execute(
-                    "INSERT INTO subscriptions (public_key, webhook_url, created_at) VALUES (?, ?, ?)",
-                    (public_key, webhook_url, now),
+                    "INSERT INTO subscriptions (public_key, webhook_url, node_public_key, created_at) VALUES (?, ?, ?, ?)",
+                    (public_key, webhook_url, node_public_key, now),
                 )
                 await db.commit()
                 return True
@@ -344,14 +350,34 @@ class Database:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
-                "SELECT public_key, webhook_url, created_at, active FROM subscriptions WHERE public_key = ?",
+                "SELECT public_key, webhook_url, node_public_key, created_at, active FROM subscriptions WHERE public_key = ?",
                 (public_key,),
             )
             row = await cursor.fetchone()
             if not row:
                 return None
             return {"public_key": row["public_key"], "webhook_url": row["webhook_url"],
+                    "node_public_key": row["node_public_key"],
                     "created_at": row["created_at"], "active": bool(row["active"])}
+
+    async def update_node_key(self, public_key: str, node_public_key: str) -> bool:
+        """Update or add a node key for an existing subscription."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE subscriptions SET node_public_key = ? WHERE public_key = ? AND active = 1",
+                (node_public_key, public_key),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_subscriber_key_mappings(self) -> dict[str, str]:
+        """Return {node_public_key: master_key} for all subscribers with node keys."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT node_public_key, public_key FROM subscriptions WHERE node_public_key IS NOT NULL AND active = 1"
+            )
+            rows = await cursor.fetchall()
+            return {r[0]: r[1] for r in rows}
 
     async def unsubscribe(self, public_key: str) -> bool:
         async with aiosqlite.connect(self.db_path) as db:

@@ -15,6 +15,14 @@ DAILY_REPORT_HOUR = 12  # UTC hour to send daily reports
 async def run_scoring_round(collector: DataCollector, scorer: ReputationScorer, db: Database) -> int | None:
     try:
         logger.info("Starting scoring round...")
+
+        # Load subscriber-provided node key mappings into collector
+        subscriber_mappings = await db.get_subscriber_key_mappings()
+        for node_key, master_key in subscriber_mappings.items():
+            collector._node_map.add(node_key, master_key, source="subscriber")
+        if subscriber_mappings:
+            logger.info("Loaded %d subscriber node key mappings", len(subscriber_mappings))
+
         snapshots, poll_results = await collector.collect()
         if not snapshots:
             logger.warning("No validator data collected, skipping scoring round")
