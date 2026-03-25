@@ -43,9 +43,9 @@
         .upgrade-prompt .upgrade-title { color: #f0883e; font-weight: 700; font-size: 1em; margin-bottom: 8px; }
         .upgrade-prompt .upgrade-body { color: #c9d1d9; font-size: 0.9em; line-height: 1.5; }
         /* Code block with copy button */
-        .code-block { position: relative; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px 48px 12px 12px; margin: 8px 0 12px 0; overflow-x: auto; }
-        .code-block code { background: none; padding: 0; font-size: 0.85em; white-space: pre; display: block; color: #79c0ff; }
-        .copy-btn { position: absolute; top: 8px; right: 8px; background: #21262d; border: 1px solid #30363d; color: #8b949e; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 0.75em; }
+        .code-block { position: relative; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 16px; padding-right: 16px; margin: 10px 0 16px 0; overflow-x: auto; }
+        .code-block code { background: none; padding: 0; font-size: 0.82em; white-space: pre-wrap; word-break: break-all; display: block; color: #79c0ff; line-height: 1.6; }
+        .copy-btn { display: block; margin-top: 10px; background: #21262d; border: 1px solid #30363d; color: #8b949e; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 0.8em; text-align: center; width: 100%; }
         .copy-btn:hover { background: #30363d; color: #c9d1d9; }
         .copy-btn.copied { color: #3fb950; border-color: #238636; }
         /* Collapsible tutorial */
@@ -126,28 +126,30 @@
                 </button>
                 <div id="tutorial-content" class="tutorial-content">
                     <ol class="guide-steps">
-                        <li>SSH into your validator server:
+                        <li>
+                            <strong>SSH into your validator server:</strong>
                             <div class="code-block">
                                 <code>ssh root@YOUR_SERVER_IP</code>
-                                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                                <button class="copy-btn" onclick="copyCode(this)">Copy command</button>
                             </div>
                         </li>
-                        <li>Run this command to get your node key:
+                        <li>
+                            <strong>Run this command to get your node key:</strong>
                             <div class="code-block">
-                                <code>docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
-  -H 'Content-Type: application/json' \
-  -d '{"method":"server_info","params":[{}]}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
-                                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                                <code id="cmd-nodekey">docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 -H 'Content-Type: application/json' -d '{"method":"server_info","params":[{}]}' | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
+                                <button class="copy-btn" onclick="copyCode(this)">Copy command</button>
                             </div>
+                            <p style="color:#8b949e; font-size:0.82em; margin-top:4px;">This queries your node's RPC and prints just the node public key.</p>
                         </li>
-                        <li>Copy the output — it starts with <code>n9</code> and looks like:
+                        <li>
+                            <strong>The output will look like this</strong> — a key starting with <code>n9</code>:
                             <div class="code-block">
                                 <code>n9KbsDV8xeD9XaKZxEasvGMFGdhmH3bBaSBmFvDzVZQzBVfAWcFv</code>
-                                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                             </div>
                         </li>
-                        <li>Paste it into the <strong>Node Public Key</strong> field above.</li>
+                        <li>
+                            <strong>Paste it</strong> into the <strong>Node Public Key</strong> field above and submit.
+                        </li>
                     </ol>
                     <div class="reassurance">
                         <strong>Is this safe?</strong> Your node key is your node's network identity — it's not secret.
