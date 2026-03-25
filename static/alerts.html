@@ -135,7 +135,37 @@ for v in json.load(sys.stdin)['validators']:
                     </div>
                 </div>
 
-                <!-- Field 2: Discord Webhook URL -->
+                <!-- Field 2: Node Public Key -->
+                <div class="field-group">
+                    <label for="node_public_key">Node Public Key <span style="color:#8b949e">(optional — unlocks full metrics)</span></label>
+                    <input type="text" id="node_public_key" placeholder="n9KbsDV8xeD9XaKZx...">
+                    <div class="field-help"><a onclick="toggleHelp('help-nodekey')">How do I find my node key?</a></div>
+                    <div id="help-nodekey" class="help-panel">
+                        <button class="close-help" onclick="toggleHelp('help-nodekey')">&times;</button>
+                        <p style="margin-bottom:12px;">Your node key starts with <code>n9</code> and identifies your node on the peer network. SSH into your server and run:</p>
+                        <div class="terminal">
+                            <div class="terminal-header">
+                                <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                                <span class="terminal-context">on your validator server</span>
+                                <button class="copy-btn" onclick="copyText(document.getElementById('cmd-nodekey-inline').textContent, this)">&#x1F4CB; Copy</button>
+                            </div>
+                            <div class="terminal-body">
+                                <code id="cmd-nodekey-inline">docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"server_info","params":[{}]}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
+                            </div>
+                        </div>
+                        <p style="color:#8b949e; font-size:0.85em;">Paste the output (starts with <code>n9</code>) into the field above.</p>
+                        <p style="color:#8b949e; font-size:0.85em; margin-top:8px;">
+                            <strong>Note:</strong> For full security, we recommend also running the
+                            <a href="#verify-section" style="color:#58a6ff">verification command</a> below after subscribing.
+                            This proves you control the node and prevents anyone else from claiming your key.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Field 3: Discord Webhook URL -->
                 <div class="field-group">
                     <label for="webhook_url">Discord Webhook URL <span style="color:#f85149">*</span></label>
                     <input type="text" id="webhook_url" placeholder="https://discord.com/api/webhooks/..." required>
@@ -186,7 +216,7 @@ for v in json.load(sys.stdin)['validators']:
                 </div>
             </div>
 
-            <h3 style="margin-top:16px;">How to verify your node key</h3>
+            <h3 id="verify-section" style="margin-top:16px;">How to verify your node key</h3>
             <p style="color:#c9d1d9; font-size:0.9em; margin-bottom:16px;">
                 To prevent anyone from claiming someone else's node, we verify you actually control it.
                 You run a command <strong>from your validator server</strong> — because only you have SSH access,
@@ -308,11 +338,17 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
             const btn = document.getElementById('submit-btn');
             const status = document.getElementById('status');
             const pk = document.getElementById('public_key').value.trim();
+            const nodeKey = document.getElementById('node_public_key').value.trim();
             const webhook = document.getElementById('webhook_url').value.trim();
 
             if (!pk.startsWith('nH')) {
                 status.className = 'status error';
                 status.textContent = 'Invalid validator public key. Must start with nH...';
+                return false;
+            }
+            if (nodeKey && !nodeKey.startsWith('n9')) {
+                status.className = 'status error';
+                status.textContent = 'Invalid node key format. Node keys start with n9...';
                 return false;
             }
             if (!webhook.startsWith('https://discord.com/api/webhooks/')) {
@@ -327,10 +363,12 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
             status.style.display = 'none';
 
             try {
+                const body = {public_key: pk, webhook_url: webhook};
+                if (nodeKey) body.node_public_key = nodeKey;
                 const resp = await fetch('/api/alerts/subscribe', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({public_key: pk, webhook_url: webhook}),
+                    body: JSON.stringify(body),
                 });
                 const data = await resp.json();
                 if (resp.ok) {
