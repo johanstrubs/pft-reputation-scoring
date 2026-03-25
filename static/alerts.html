@@ -42,12 +42,23 @@
         .upgrade-prompt { background: #0d1117; border: 2px solid #f0883e; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
         .upgrade-prompt .upgrade-title { color: #f0883e; font-weight: 700; font-size: 1em; margin-bottom: 8px; }
         .upgrade-prompt .upgrade-body { color: #c9d1d9; font-size: 0.9em; line-height: 1.5; }
-        /* Code block with copy button */
-        .code-block { position: relative; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 16px; padding-right: 16px; margin: 10px 0 16px 0; overflow-x: auto; }
-        .code-block code { background: none; padding: 0; font-size: 0.82em; white-space: pre-wrap; word-break: break-all; display: block; color: #79c0ff; line-height: 1.6; }
-        .copy-btn { display: block; margin-top: 10px; background: #21262d; border: 1px solid #30363d; color: #8b949e; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 0.8em; text-align: center; width: 100%; }
-        .copy-btn:hover { background: #30363d; color: #c9d1d9; }
-        .copy-btn.copied { color: #3fb950; border-color: #238636; }
+        /* Terminal-style code block */
+        .terminal { background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin: 10px 0 16px 0; overflow: hidden; }
+        .terminal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #30363d; background: #1c2128; }
+        .terminal-dots { display: flex; gap: 6px; }
+        .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; }
+        .terminal-dots .dot-red { background: #ff5f57; }
+        .terminal-dots .dot-yellow { background: #febc2e; }
+        .terminal-dots .dot-green { background: #28c840; }
+        .terminal-context { color: #484f58; font-size: 0.78em; }
+        .copy-btn { background: none; border: none; color: #484f58; cursor: pointer; font-size: 0.78em; display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; }
+        .copy-btn:hover { color: #c9d1d9; background: #30363d; }
+        .copy-btn.copied { color: #3fb950; }
+        .terminal-body { padding: 16px; overflow-x: auto; }
+        .terminal-body code { background: none; padding: 0; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; display: block; color: #c9d1d9; line-height: 1.7; font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
+        .terminal-body .cmd-comment { color: #484f58; }
+        /* Output-only terminal (no copy, muted) */
+        .terminal.output .terminal-body code { color: #8b949e; }
         /* Collapsible tutorial */
         .tutorial-toggle { background: none; border: 1px solid #30363d; color: #58a6ff; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 0.95em; font-weight: 500; width: 100%; text-align: left; margin-bottom: 12px; }
         .tutorial-toggle:hover { background: #161b22; }
@@ -127,24 +138,46 @@
                 <div id="tutorial-content" class="tutorial-content">
                     <ol class="guide-steps">
                         <li>
-                            <strong>SSH into your validator server:</strong>
-                            <div class="code-block">
-                                <code>ssh root@YOUR_SERVER_IP</code>
-                                <button class="copy-btn" onclick="copyCode(this)">Copy command</button>
+                            <strong>SSH into your validator server</strong>
+                            <div class="terminal">
+                                <div class="terminal-header">
+                                    <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                                    <span class="terminal-context">your local terminal</span>
+                                    <button class="copy-btn" onclick="copyText('ssh root@YOUR_SERVER_IP', this)">&#x1F4CB; Copy</button>
+                                </div>
+                                <div class="terminal-body">
+                                    <code>ssh root@YOUR_SERVER_IP</code>
+                                </div>
+                            </div>
+                            <p style="color:#484f58; font-size:0.82em;">Replace <code>YOUR_SERVER_IP</code> with your validator's IP address.</p>
+                        </li>
+                        <li>
+                            <strong>Run this command to get your node key</strong>
+                            <div class="terminal">
+                                <div class="terminal-header">
+                                    <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                                    <span class="terminal-context">on your validator server</span>
+                                    <button class="copy-btn" onclick="copyText(document.getElementById('cmd2').textContent, this)">&#x1F4CB; Copy</button>
+                                </div>
+                                <div class="terminal-body">
+                                    <code id="cmd2"><span class="cmd-comment"># Query your node's RPC for its public key</span>
+docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"server_info","params":[{}]}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
+                                </div>
                             </div>
                         </li>
                         <li>
-                            <strong>Run this command to get your node key:</strong>
-                            <div class="code-block">
-                                <code id="cmd-nodekey">docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 -H 'Content-Type: application/json' -d '{"method":"server_info","params":[{}]}' | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
-                                <button class="copy-btn" onclick="copyCode(this)">Copy command</button>
-                            </div>
-                            <p style="color:#8b949e; font-size:0.82em; margin-top:4px;">This queries your node's RPC and prints just the node public key.</p>
-                        </li>
-                        <li>
-                            <strong>The output will look like this</strong> — a key starting with <code>n9</code>:
-                            <div class="code-block">
-                                <code>n9KbsDV8xeD9XaKZxEasvGMFGdhmH3bBaSBmFvDzVZQzBVfAWcFv</code>
+                            <strong>Copy the output</strong> — it starts with <code>n9</code>
+                            <div class="terminal output">
+                                <div class="terminal-header">
+                                    <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                                    <span class="terminal-context">example output</span>
+                                </div>
+                                <div class="terminal-body">
+                                    <code>n9KbsDV8xeD9XaKZxEasvGMFGdhmH3bBaSBmFvDzVZQzBVfAWcFv</code>
+                                </div>
                             </div>
                         </li>
                         <li>
@@ -208,12 +241,12 @@
             el.classList.toggle('open');
         }
 
-        function copyCode(btn) {
-            const code = btn.previousElementSibling.textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                btn.textContent = 'Copied!';
+        function copyText(text, btn) {
+            navigator.clipboard.writeText(text.trim()).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '&#x2705; Copied';
                 btn.classList.add('copied');
-                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+                setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
             });
         }
 
