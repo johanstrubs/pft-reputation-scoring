@@ -25,12 +25,12 @@
         .cta a { color: var(--accent); font-weight: 600; text-decoration: none; }
         .cta a:hover { text-decoration: underline; }
         /* Distribution bars */
-        .dist-table { width: 100%; border-collapse: collapse; }
+        .dist-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .dist-table td { padding: 8px 0; vertical-align: middle; }
-        .dist-table .label { width: 200px; color: var(--text); font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .dist-table .bar-cell { width: 100%; }
-        .dist-table .count { width: 60px; text-align: right; color: var(--text-muted); font-size: 0.85em; }
-        .dist-table .pct { width: 60px; text-align: right; font-weight: 600; font-size: 0.85em; }
+        .dist-table .label { width: 220px; color: var(--text); font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 12px; }
+        .dist-table .bar-cell { padding: 0 12px; }
+        .dist-table .count { width: 32px; text-align: right; color: var(--text-muted); font-size: 0.85em; white-space: nowrap; padding-right: 8px; }
+        .dist-table .pct { width: 52px; text-align: right; font-weight: 600; font-size: 0.85em; white-space: nowrap; }
         .dist-bar { height: 24px; border-radius: 4px; background: var(--accent); transition: width 0.5s; min-width: 4px; }
         .dist-bar.warn { background: var(--yellow); }
         .dist-bar.danger { background: var(--red); }
@@ -47,7 +47,7 @@
         .loading { text-align: center; padding: 48px; color: var(--text-muted); }
         footer { text-align: center; color: var(--text-muted); font-size: 0.8em; margin-top: 32px; padding: 16px; }
         footer a { color: var(--accent); text-decoration: none; }
-        @media (max-width: 480px) { .dist-table .label { width: 120px; font-size: 0.8em; } }
+        @media (max-width: 600px) { .dist-table .label { width: 140px; font-size: 0.8em; } .dist-table .pct { width: 48px; font-size: 0.8em; } }
     </style>
 </head>
 <body>
@@ -189,7 +189,7 @@
             const maxPct = Math.max(...items.map(i => i.pct));
             items.forEach(item => {
                 const label = labelKey === 'asn' ? 'AS' + item.asn + ' (' + item.isp + ')' : item[labelKey];
-                const barWidth = (item.pct / Math.max(maxPct, 1)) * 100;
+                const barWidth = Math.max((item.pct / Math.max(maxPct, 1)) * 100, 2);
                 const barClass = item.pct > 50 ? 'danger' : item.pct > 33 ? 'warn' : '';
                 const pctColor = item.pct > 33 ? 'var(--yellow)' : 'var(--text-muted)';
                 const tr = document.createElement('tr');
@@ -197,7 +197,7 @@
                     '<td class="label" title="' + label + '">' + label + '</td>' +
                     '<td class="bar-cell"><div class="dist-bar ' + barClass + '" style="width:' + barWidth + '%"></div></td>' +
                     '<td class="count">' + item.count + '</td>' +
-                    '<td class="pct" style="color:' + pctColor + '">' + item.pct + '%</td>';
+                    '<td class="pct" style="color:' + pctColor + '">' + item.pct.toFixed(1) + '%</td>';
                 table.appendChild(tr);
             });
         }
