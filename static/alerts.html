@@ -14,9 +14,13 @@
         .card h2 { color: #f0f6fc; font-size: 1.2em; margin-bottom: 16px; }
         .card h3 { color: #58a6ff; font-size: 1em; margin-bottom: 12px; }
         label { display: block; color: #c9d1d9; margin-bottom: 6px; font-weight: 500; }
-        input[type="text"] { width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.95em; font-family: monospace; margin-bottom: 16px; }
+        input[type="text"] { width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.95em; font-family: monospace; margin-bottom: 4px; }
         input[type="text"]:focus { border-color: #58a6ff; outline: none; }
         input[type="text"]::placeholder { color: #484f58; }
+        .field-group { margin-bottom: 20px; }
+        .field-help { margin-bottom: 12px; }
+        .field-help a { color: #58a6ff; text-decoration: none; font-size: 0.85em; cursor: pointer; }
+        .field-help a:hover { text-decoration: underline; }
         button { background: #238636; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; font-size: 1em; cursor: pointer; font-weight: 600; width: 100%; }
         button:hover { background: #2ea043; }
         button:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
@@ -24,26 +28,29 @@
         .status.success { display: block; background: #0d2818; border: 1px solid #238636; color: #3fb950; }
         .status.error { display: block; background: #2d1117; border: 1px solid #f85149; color: #f85149; }
         .status.info { display: block; background: #0d1117; border: 1px solid #58a6ff; color: #58a6ff; }
-        .guide-steps { counter-reset: step; padding-left: 0; list-style: none; }
-        .guide-steps li { counter-increment: step; margin-bottom: 12px; padding-left: 32px; position: relative; color: #8b949e; line-height: 1.5; }
-        .guide-steps li::before { content: counter(step); position: absolute; left: 0; width: 22px; height: 22px; background: #21262d; border-radius: 50%; text-align: center; line-height: 22px; font-size: 0.8em; color: #58a6ff; font-weight: 600; }
         code { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #79c0ff; }
         .features { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
         .feature { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }
         .feature-icon { font-size: 1.4em; margin-bottom: 4px; }
         .feature-title { color: #f0f6fc; font-weight: 600; font-size: 0.9em; }
         .feature-desc { color: #8b949e; font-size: 0.8em; margin-top: 4px; }
-        .report-preview { margin-top: 24px; }
-        .report-preview img { width: 100%; border-radius: 8px; border: 1px solid #30363d; }
         .manage-link { text-align: center; margin-top: 16px; }
         .manage-link a { color: #58a6ff; text-decoration: none; font-size: 0.9em; }
         .manage-link a:hover { text-decoration: underline; }
+        /* Inline help panel */
+        .help-panel { display: none; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .help-panel.open { display: block; }
+        .help-panel .close-help { float: right; background: none; border: none; color: #8b949e; cursor: pointer; font-size: 1.2em; width: auto; padding: 0; }
+        .help-panel .close-help:hover { color: #c9d1d9; }
+        .guide-steps { counter-reset: step; padding-left: 0; list-style: none; }
+        .guide-steps li { counter-increment: step; margin-bottom: 12px; padding-left: 32px; position: relative; color: #c9d1d9; line-height: 1.5; }
+        .guide-steps li::before { content: counter(step); position: absolute; left: 0; width: 22px; height: 22px; background: #21262d; border-radius: 50%; text-align: center; line-height: 22px; font-size: 0.8em; color: #58a6ff; font-weight: 600; }
         /* Upgrade prompt */
         .upgrade-prompt { background: #0d1117; border: 2px solid #f0883e; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
         .upgrade-prompt .upgrade-title { color: #f0883e; font-weight: 700; font-size: 1em; margin-bottom: 8px; }
         .upgrade-prompt .upgrade-body { color: #c9d1d9; font-size: 0.9em; line-height: 1.5; }
         /* Terminal-style code block */
-        .terminal { background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin: 10px 0 16px 0; overflow: hidden; }
+        .terminal { background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin: 10px 0 12px 0; overflow: hidden; }
         .terminal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #30363d; background: #1c2128; }
         .terminal-dots { display: flex; gap: 6px; }
         .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; }
@@ -51,29 +58,20 @@
         .terminal-dots .dot-yellow { background: #febc2e; }
         .terminal-dots .dot-green { background: #28c840; }
         .terminal-context { color: #8b949e; font-size: 0.78em; }
-        .copy-btn { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 0.78em; display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; }
+        .copy-btn { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 0.78em; display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; width: auto; }
         .copy-btn:hover { color: #c9d1d9; background: #30363d; }
         .copy-btn.copied { color: #3fb950; }
         .terminal-body { padding: 16px; overflow-x: auto; }
-        .terminal-body code { background: none; padding: 0; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; display: block; color: #c9d1d9; line-height: 1.7; font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
+        .terminal-body code { background: none; padding: 0; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; display: block; color: #c9d1d9; line-height: 1.7; font-family: 'SF Mono', 'Fira Code', monospace; }
         .terminal-body .cmd-comment { color: #6e7681; }
-        /* Output-only terminal (no copy, muted) */
         .terminal.output .terminal-body code { color: #8b949e; }
-        /* Collapsible tutorial */
-        .tutorial-toggle { background: none; border: 1px solid #30363d; color: #58a6ff; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 0.95em; font-weight: 500; width: 100%; text-align: left; margin-bottom: 12px; }
-        .tutorial-toggle:hover { background: #161b22; }
-        .tutorial-content { display: none; }
-        .tutorial-content.open { display: block; }
-        .reassurance { background: #0d2818; border: 1px solid #238636; border-radius: 6px; padding: 12px; margin-top: 12px; color: #8b949e; font-size: 0.85em; line-height: 1.5; }
+        .reassurance { background: #0d2818; border: 1px solid #238636; border-radius: 6px; padding: 12px; margin-top: 12px; color: #c9d1d9; font-size: 0.85em; line-height: 1.5; }
         .reassurance strong { color: #3fb950; }
-        /* Nav links */
+        .report-preview img { width: 100%; border-radius: 8px; border: 1px solid #30363d; }
         .nav-links { margin-bottom: 24px; }
         .nav-links a { color: #58a6ff; text-decoration: none; font-size: 0.9em; margin-right: 16px; }
         .nav-links a:hover { text-decoration: underline; }
-        @media (max-width: 480px) {
-            .features { grid-template-columns: 1fr; }
-            h1 { font-size: 1.4em; }
-        }
+        @media (max-width: 480px) { .features { grid-template-columns: 1fr; } h1 { font-size: 1.4em; } }
     </style>
 </head>
 <body>
@@ -86,49 +84,85 @@
         <h1>Validator Alerts & Daily Report Cards</h1>
         <p class="subtitle">Get daily scorecards and critical alerts for your Post Fiat validator via Discord.</p>
 
+        <!-- What You'll Receive -->
         <div class="card">
             <h2>What You'll Receive</h2>
             <div class="features">
-                <div class="feature">
-                    <div class="feature-icon">📊</div>
-                    <div class="feature-title">Daily Report Card</div>
-                    <div class="feature-desc">Rank, score, metric breakdown with visual bars, improvement tips, nearby competitors</div>
-                </div>
-                <div class="feature">
-                    <div class="feature-icon">🚨</div>
-                    <div class="feature-title">Critical Alerts</div>
-                    <div class="feature-desc">Immediate notification if agreement drops below 0.90 or your validator disappears</div>
-                </div>
-                <div class="feature">
-                    <div class="feature-icon">📈</div>
-                    <div class="feature-title">Network Context</div>
-                    <div class="feature-desc">Network averages, health tier counts, top movers — see where you stand</div>
-                </div>
-                <div class="feature">
-                    <div class="feature-icon">🏆</div>
-                    <div class="feature-title">Competitive Ranking</div>
-                    <div class="feature-desc">See who's directly above and below you, with rank change tracking</div>
-                </div>
+                <div class="feature"><div class="feature-icon">📊</div><div class="feature-title">Daily Report Card</div><div class="feature-desc">Rank, score, metric breakdown with visual bars, improvement tips, nearby competitors</div></div>
+                <div class="feature"><div class="feature-icon">🚨</div><div class="feature-title">Critical Alerts</div><div class="feature-desc">Immediate notification if agreement drops below 0.90 or your validator disappears</div></div>
+                <div class="feature"><div class="feature-icon">📈</div><div class="feature-title">Network Context</div><div class="feature-desc">Network averages, health tier counts, top movers — see where you stand</div></div>
+                <div class="feature"><div class="feature-icon">🏆</div><div class="feature-title">Competitive Ranking</div><div class="feature-desc">See who's directly above and below you, with rank change tracking</div></div>
             </div>
         </div>
 
+        <!-- Subscribe Form -->
         <div class="card" id="subscribe-card">
             <h2>Subscribe</h2>
-            <form id="subscribe-form" onsubmit="return handleSubscribe(event)">
-                <label for="public_key">Validator Public Key <span style="color:#f85149">*</span></label>
-                <input type="text" id="public_key" name="public_key" placeholder="nHD3sPmh..." required>
+            <p style="color:#8b949e; margin-bottom:20px;">Fill in the fields below. Click the help link under each field if you need guidance.</p>
 
-                <label for="webhook_url">Discord Webhook URL <span style="color:#f85149">*</span></label>
-                <input type="text" id="webhook_url" name="webhook_url" placeholder="https://discord.com/api/webhooks/..." required>
+            <form id="subscribe-form" onsubmit="return handleSubscribe(event)">
+
+                <!-- Field 1: Validator Public Key -->
+                <div class="field-group">
+                    <label for="public_key">Validator Public Key <span style="color:#f85149">*</span></label>
+                    <input type="text" id="public_key" placeholder="nHD3sPmh..." required>
+                    <div class="field-help"><a onclick="toggleHelp('help-validator')">How do I find my validator public key?</a></div>
+                    <div id="help-validator" class="help-panel">
+                        <button class="close-help" onclick="toggleHelp('help-validator')">&times;</button>
+                        <p style="margin-bottom:12px;">Your validator public key starts with <code>nH</code> and uniquely identifies your validator on the network. Here's how to find it:</p>
+                        <ol class="guide-steps">
+                            <li>Check your validator's configuration file — the key is usually in <code>validators.txt</code> or was shown when you first set up your node.</li>
+                            <li>Look at the <a href="/leaderboard" style="color:#58a6ff">leaderboard</a> — find your validator by domain name and copy the public key.</li>
+                            <li>Or run this on your server:
+                                <div class="terminal">
+                                    <div class="terminal-header">
+                                        <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                                        <span class="terminal-context">on your validator server</span>
+                                        <button class="copy-btn" onclick="copyText(document.getElementById('cmd-valkey').textContent, this)">&#x1F4CB; Copy</button>
+                                    </div>
+                                    <div class="terminal-body">
+                                        <code id="cmd-valkey"><span class="cmd-comment"># Get your validator's public key from the scoring API</span>
+curl -s https://dashboard.pftoligarchy.com/api/scores | python3 -c "
+import sys,json
+for v in json.load(sys.stdin)['validators']:
+    if v.get('domain') and 'YOUR_DOMAIN' in v['domain']:
+        print(v['public_key'])"</code>
+                                    </div>
+                                </div>
+                                <p style="color:#8b949e; font-size:0.82em;">Replace <code>YOUR_DOMAIN</code> with your validator's domain name.</p>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- Field 2: Discord Webhook URL -->
+                <div class="field-group">
+                    <label for="webhook_url">Discord Webhook URL <span style="color:#f85149">*</span></label>
+                    <input type="text" id="webhook_url" placeholder="https://discord.com/api/webhooks/..." required>
+                    <div class="field-help"><a onclick="toggleHelp('help-webhook')">How do I create a Discord webhook?</a></div>
+                    <div id="help-webhook" class="help-panel">
+                        <button class="close-help" onclick="toggleHelp('help-webhook')">&times;</button>
+                        <p style="margin-bottom:12px;">A webhook lets us send messages to your Discord channel. It takes about 30 seconds to set up:</p>
+                        <ol class="guide-steps">
+                            <li>Open Discord and <strong>right-click your server name</strong> at the top of the channel list. Select <strong>Server Settings</strong>.</li>
+                            <li>In the left sidebar under Apps, click <strong>Integrations</strong>.</li>
+                            <li>Click <strong>Webhooks</strong>, then click <strong>New Webhook</strong>.</li>
+                            <li>Give it a name (e.g. "Validator Alerts"), and use the <strong>Channel</strong> dropdown to pick which channel receives alerts.</li>
+                            <li>Click <strong>Copy Webhook URL</strong> and paste it into the field above.</li>
+                        </ol>
+                        <p style="color:#8b949e; font-size:0.85em; margin-top:8px;">
+                            Webhook URLs look like: <code>https://discord.com/api/webhooks/123.../abc...</code><br>
+                            <em>Note: Do NOT use the gear icon at the bottom-left of Discord — that opens User Settings, not Server Settings.</em>
+                        </p>
+                    </div>
+                </div>
 
                 <button type="submit" id="submit-btn">Subscribe & Send Test Message</button>
             </form>
             <div id="status" class="status"></div>
             <div class="manage-link">
-                <a href="#" onclick="showManage(); return false;">Manage subscription</a>
+                <a href="#" onclick="showManage(); return false;">Manage existing subscription</a>
             </div>
-
-            <!-- Manage subscription panel -->
             <div id="manage-panel" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid #30363d;">
                 <label for="manage_pk">Your Validator Public Key</label>
                 <input type="text" id="manage_pk" placeholder="nHD3sPmh...">
@@ -140,22 +174,23 @@
             </div>
         </div>
 
+        <!-- Node Key Verification (separate section, clearly explained) -->
         <div class="card">
             <div class="upgrade-prompt">
                 <div class="upgrade-title">🔓 Unlock Full Metrics — Link Your Node Key</div>
                 <div class="upgrade-body">
-                    Without your node key, your report card covers agreement scores and version — about 45% of the full picture.
-                    <strong>With it</strong>, you get latency, uptime, peer count, and geographic diversity scoring.
-                    Your composite score becomes more accurate, and you help improve the
-                    <a href="/network" style="color:#58a6ff">network diversity map</a> for the whole community.
+                    After subscribing, you can optionally link your node key to unlock the complete picture.
+                    Without it, your report covers agreement scores and version (about 45% of metrics).
+                    <strong>With it</strong>, you also get latency, uptime, peer count, and geographic diversity scoring.
+                    You also help improve the <a href="/network" style="color:#58a6ff">network diversity map</a> for the whole community.
                 </div>
             </div>
 
             <h3 style="margin-top:16px;">How to verify your node key</h3>
-            <p style="color:#8b949e; font-size:0.9em; margin-bottom:16px;">
+            <p style="color:#c9d1d9; font-size:0.9em; margin-bottom:16px;">
                 To prevent anyone from claiming someone else's node, we verify you actually control it.
-                You run a single command <strong>from your validator server</strong> — because only you have SSH access,
-                and we can check that the request comes from your node's IP address.
+                You run a command <strong>from your validator server</strong> — because only you have SSH access,
+                we can check that the request comes from your node's IP address. This proves ownership.
             </p>
 
             <ol class="guide-steps">
@@ -167,14 +202,12 @@
                             <span class="terminal-context">your local terminal</span>
                             <button class="copy-btn" onclick="copyText('ssh root@YOUR_SERVER_IP', this)">&#x1F4CB; Copy</button>
                         </div>
-                        <div class="terminal-body">
-                            <code>ssh root@YOUR_SERVER_IP</code>
-                        </div>
+                        <div class="terminal-body"><code>ssh root@YOUR_SERVER_IP</code></div>
                     </div>
                     <p style="color:#8b949e; font-size:0.82em;">Replace <code>YOUR_SERVER_IP</code> with your validator's IP address.</p>
                 </li>
                 <li>
-                    <strong>Get your node key</strong>
+                    <strong>Get your node key</strong> — this is your node's network identity (starts with <code>n9</code>)
                     <div class="terminal">
                         <div class="terminal-header">
                             <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
@@ -189,10 +222,10 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
                         </div>
                     </div>
-                    <p style="color:#8b949e; font-size:0.82em;">This prints your node key — it starts with <code>n9</code>. Copy it for the next step.</p>
+                    <p style="color:#8b949e; font-size:0.82em;">Copy the output — you'll need it for the next step.</p>
                 </li>
                 <li>
-                    <strong>Run the verification command</strong> — replace <code>YOUR_VALIDATOR_KEY</code> and <code>YOUR_NODE_KEY</code> with your actual keys
+                    <strong>Run the verification command</strong> — replace the two placeholder values with your actual keys
                     <div class="terminal">
                         <div class="terminal-header">
                             <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
@@ -206,12 +239,14 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
   -d '{"validator_key":"YOUR_VALIDATOR_KEY","node_key":"YOUR_NODE_KEY"}'</code>
                         </div>
                     </div>
-                    <p style="color:#8b949e; font-size:0.82em;">
-                        <strong>What this does:</strong> Sends your two keys to our API. We check that the request
-                        comes from the same IP address that the network knows your node lives at. Since only you
-                        have SSH access to your server, this proves you control the node.<br>
+                    <p style="color:#c9d1d9; font-size:0.85em; margin-top:8px;">
+                        <strong>What this does:</strong> Sends your two public keys to our API. We check that the request
+                        comes from the same IP address where your node lives on the network. Since only you
+                        have SSH access to your server, this proves you control the node.
+                    </p>
+                    <p style="color:#c9d1d9; font-size:0.85em; margin-top:4px;">
                         <strong>What it does NOT do:</strong> It doesn't send passwords, private keys, or any secrets.
-                        Both keys are public identifiers — it's just verifying you're the one linking them.
+                        Both keys are public identifiers already visible to the network — this just verifies you're the one linking them.
                     </p>
                 </li>
                 <li>
@@ -221,41 +256,23 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
                             <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
                             <span class="terminal-context">expected response</span>
                         </div>
-                        <div class="terminal-body">
-                            <code>{"message":"Verified! Your node key has been linked to your validator..."}</code>
-                        </div>
+                        <div class="terminal-body"><code>{"message":"Verified! Your node key has been linked to your validator..."}</code></div>
                     </div>
-                    <p style="color:#8b949e; font-size:0.82em;">
-                        If you see an error about the IP not matching, make sure you're running the command
-                        on your validator server (not your laptop). The IP of the request must match your node's
-                        topology IP.
+                    <p style="color:#8b949e; font-size:0.85em;">
+                        If you get an IP mismatch error, make sure you're running the command on your validator server, not your laptop.
                     </p>
                 </li>
             </ol>
 
             <div class="reassurance">
                 <strong>Is this safe?</strong> Both your validator key and node key are public identifiers — they're visible to
-                the entire network. This command doesn't expose any secrets. The only thing being verified is that you
-                have server access (SSH) to the machine running that node, which proves you're its operator.
+                the entire network already. This command doesn't expose any secrets. The only thing being verified is that you
+                have SSH access to the machine running that node.
             </div>
         </div>
 
+        <!-- Example Report Card -->
         <div class="card">
-            <h3>How to Create a Discord Webhook</h3>
-            <ol class="guide-steps">
-                <li>Open Discord and right-click your <strong>server name</strong> at the top of the channel list. Select <strong>Server Settings</strong>.</li>
-                <li>In the left sidebar under Apps, click <strong>Integrations</strong>.</li>
-                <li>Click <strong>Webhooks</strong>, then click <strong>New Webhook</strong>.</li>
-                <li>Give it a name (e.g. "Validator Alerts"), and use the <strong>Channel</strong> dropdown to pick which channel receives alerts.</li>
-                <li>Click <strong>Copy Webhook URL</strong> — paste it into the form above.</li>
-            </ol>
-            <p style="margin-top: 12px; color: #8b949e; font-size: 0.85em;">
-                Webhook URLs look like: <code>https://discord.com/api/webhooks/123.../abc...</code><br>
-                <em>Note: Do NOT use the gear icon at the bottom-left — that opens User Settings, not Server Settings.</em>
-            </p>
-        </div>
-
-        <div class="card report-preview">
             <h2>Example Daily Report Card</h2>
             <p style="color: #8b949e; margin-bottom: 12px;">Here's what a real daily report looks like in Discord:</p>
             <div id="screenshot-container">
@@ -272,8 +289,8 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
     </div>
 
     <script>
-        function toggleTutorial() {
-            const el = document.getElementById('tutorial-content');
+        function toggleHelp(id) {
+            const el = document.getElementById(id);
             el.classList.toggle('open');
         }
 
@@ -310,16 +327,15 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
             status.style.display = 'none';
 
             try {
-                const body = {public_key: pk, webhook_url: webhook};
                 const resp = await fetch('/api/alerts/subscribe', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(body),
+                    body: JSON.stringify({public_key: pk, webhook_url: webhook}),
                 });
                 const data = await resp.json();
                 if (resp.ok) {
                     status.className = 'status success';
-                    status.textContent = data.message || 'Subscribed! Check your Discord channel for a confirmation message.';
+                    status.textContent = data.message || 'Subscribed! Check your Discord for a confirmation message.';
                 } else {
                     status.className = 'status error';
                     status.textContent = data.detail || 'Subscription failed. Please try again.';
@@ -362,16 +378,15 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
                 const data = await resp.json();
                 if (resp.ok && data.subscription) {
                     const s = data.subscription;
-                    let nodeInfo;
-                    let statusType;
+                    let nodeInfo, statusType;
                     if (s.node_public_key && s.node_verified) {
                         nodeInfo = 'Full metrics active — node key verified (' + s.node_public_key.substring(0, 16) + '...)';
                         statusType = 'success';
                     } else if (s.node_public_key) {
-                        nodeInfo = 'Node key pending verification (' + s.node_public_key.substring(0, 16) + '...)';
+                        nodeInfo = 'Node key pending verification';
                         statusType = 'info';
                     } else {
-                        nodeInfo = 'Basic metrics only — verify your node key using the tutorial below';
+                        nodeInfo = 'Basic metrics only — verify your node key using the tutorial below for full scoring';
                         statusType = 'info';
                     }
                     showManageStatus((s.active ? 'Active' : 'Inactive') + ' | ' + nodeInfo + ' | Since: ' + s.created_at.substring(0, 10), statusType);
