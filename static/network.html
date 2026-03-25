@@ -180,6 +180,21 @@
             });
         }
 
+        const COUNTRY_NAMES = {
+            'US': 'United States', 'DE': 'Germany', 'FI': 'Finland', 'GB': 'United Kingdom',
+            'NL': 'Netherlands', 'FR': 'France', 'CA': 'Canada', 'SG': 'Singapore',
+            'JP': 'Japan', 'AU': 'Australia', 'KR': 'South Korea', 'IN': 'India',
+            'BR': 'Brazil', 'SE': 'Sweden', 'CH': 'Switzerland', 'IE': 'Ireland',
+            'PL': 'Poland', 'IT': 'Italy', 'ES': 'Spain', 'AT': 'Austria',
+            'CZ': 'Czech Republic', 'RO': 'Romania', 'BG': 'Bulgaria', 'HU': 'Hungary',
+            'LT': 'Lithuania', 'LV': 'Latvia', 'EE': 'Estonia', 'NO': 'Norway',
+            'DK': 'Denmark', 'PT': 'Portugal', 'RU': 'Russia', 'UA': 'Ukraine',
+            'ZA': 'South Africa', 'HK': 'Hong Kong', 'TW': 'Taiwan', 'TH': 'Thailand',
+            'MY': 'Malaysia', 'ID': 'Indonesia', 'PH': 'Philippines', 'VN': 'Vietnam',
+            'MX': 'Mexico', 'AR': 'Argentina', 'CL': 'Chile', 'CO': 'Colombia',
+            'TR': 'Turkey', 'IL': 'Israel', 'AE': 'United Arab Emirates', 'NZ': 'New Zealand',
+        };
+
         function renderDistTable(tableId, items, labelKey) {
             const table = document.getElementById(tableId);
             if (!items.length) {
@@ -188,7 +203,12 @@
             }
             const maxPct = Math.max(...items.map(i => i.pct));
             items.forEach(item => {
-                const label = labelKey === 'asn' ? 'AS' + item.asn + ' (' + item.isp + ')' : item[labelKey];
+                let label = labelKey === 'asn' ? 'AS' + item.asn + ' (' + item.isp + ')' : item[labelKey];
+                let tooltip = label;
+                if (labelKey === 'country' && COUNTRY_NAMES[item.country]) {
+                    tooltip = COUNTRY_NAMES[item.country];
+                    label = item.country + ' — ' + COUNTRY_NAMES[item.country];
+                }
                 const barWidth = Math.max((item.pct / Math.max(maxPct, 1)) * 100, 2);
                 const barClass = item.pct > 50 ? 'danger' : item.pct > 33 ? 'warn' : '';
                 const pctColor = item.pct > 33 ? 'var(--yellow)' : 'var(--text-muted)';
