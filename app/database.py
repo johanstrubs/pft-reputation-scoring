@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     public_key TEXT NOT NULL,
     webhook_url TEXT NOT NULL,
     node_public_key TEXT,
+    node_verified BOOLEAN DEFAULT 0,
     created_at TEXT NOT NULL,
     active BOOLEAN DEFAULT 1,
     UNIQUE(public_key, webhook_url)
@@ -92,11 +93,15 @@ class Database:
     async def init(self):
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA)
-            # Non-destructive migration: add node_public_key if missing
-            try:
-                await db.execute("ALTER TABLE subscriptions ADD COLUMN node_public_key TEXT")
-            except Exception:
-                pass  # Column already exists
+            # Non-destructive migrations
+            for col, sql in [
+                ("node_public_key", "ALTER TABLE subscriptions ADD COLUMN node_public_key TEXT"),
+                ("node_verified", "ALTER TABLE subscriptions ADD COLUMN node_verified BOOLEAN DEFAULT 0"),
+            ]:
+                try:
+                    await db.execute(sql)
+                except Exception:
+                    pass  # Column already exists
             await db.commit()
 
     async def store_round(self, scores: list[ValidatorScore]) -> int:
@@ -350,7 +355,7 @@ class Database:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
-                "SELECT public_key, webhook_url, node_public_key, created_at, active FROM subscriptions WHERE public_key = ?",
+                "SELECT public_key, webhook_url, node_public_key, node_verified, created_at, active FROM subscriptions WHERE public_key = ?",
                 (public_key,),
             )
             row = await cursor.fetchone()
@@ -358,23 +363,24 @@ class Database:
                 return None
             return {"public_key": row["public_key"], "webhook_url": row["webhook_url"],
                     "node_public_key": row["node_public_key"],
+                    "node_verified": bool(row["node_verified"]),
                     "created_at": row["created_at"], "active": bool(row["active"])}
 
-    async def update_node_key(self, public_key: str, node_public_key: str) -> bool:
+    async def update_node_key(self, public_key: str, node_public_key: str, verified: bool = False) -> bool:
         """Update or add a node key for an existing subscription."""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "UPDATE subscriptions SET node_public_key = ? WHERE public_key = ? AND active = 1",
-                (node_public_key, public_key),
+                "UPDATE subscriptions SET node_public_key = ?, node_verified = ? WHERE public_key = ? AND active = 1",
+                (node_public_key, verified, public_key),
             )
             await db.commit()
             return cursor.rowcount > 0
 
     async def get_subscriber_key_mappings(self) -> dict[str, str]:
-        """Return {node_public_key: master_key} for all subscribers with node keys."""
+        """Return {node_public_key: master_key} for verified subscribers only."""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "SELECT node_public_key, public_key FROM subscriptions WHERE node_public_key IS NOT NULL AND active = 1"
+                "SELECT node_public_key, public_key FROM subscriptions WHERE node_public_key IS NOT NULL AND node_verified = 1 AND active = 1"
             )
             rows = await cursor.fetchall()
             return {r[0]: r[1] for r in rows}

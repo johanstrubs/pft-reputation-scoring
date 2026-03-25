@@ -118,79 +118,6 @@
                 <label for="public_key">Validator Public Key <span style="color:#f85149">*</span></label>
                 <input type="text" id="public_key" name="public_key" placeholder="nHD3sPmh..." required>
 
-                <!-- Node Key Upgrade Prompt -->
-                <div class="upgrade-prompt">
-                    <div class="upgrade-title">🔓 Unlock Full Metrics</div>
-                    <div class="upgrade-body">
-                        Without your node key, your report card covers agreement scores and version — about 45% of the full picture.
-                        <strong>With it</strong>, you get latency, uptime, peer count, and geographic diversity scoring.
-                        Your composite score becomes more accurate, and you help improve the
-                        <a href="/network" style="color:#58a6ff">network diversity map</a> for the whole community.
-                    </div>
-                </div>
-
-                <label for="node_public_key">Node Public Key <span style="color:#8b949e">(optional — unlocks full metrics)</span></label>
-                <input type="text" id="node_public_key" name="node_public_key" placeholder="n9KbsDV8xeD9XaKZx...">
-
-                <button type="button" class="tutorial-toggle" onclick="toggleTutorial()">
-                    📖 How to find your node key ▾
-                </button>
-                <div id="tutorial-content" class="tutorial-content">
-                    <ol class="guide-steps">
-                        <li>
-                            <strong>SSH into your validator server</strong>
-                            <div class="terminal">
-                                <div class="terminal-header">
-                                    <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
-                                    <span class="terminal-context">your local terminal</span>
-                                    <button class="copy-btn" onclick="copyText('ssh root@YOUR_SERVER_IP', this)">&#x1F4CB; Copy</button>
-                                </div>
-                                <div class="terminal-body">
-                                    <code>ssh root@YOUR_SERVER_IP</code>
-                                </div>
-                            </div>
-                            <p style="color:#484f58; font-size:0.82em;">Replace <code>YOUR_SERVER_IP</code> with your validator's IP address.</p>
-                        </li>
-                        <li>
-                            <strong>Run this command to get your node key</strong>
-                            <div class="terminal">
-                                <div class="terminal-header">
-                                    <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
-                                    <span class="terminal-context">on your validator server</span>
-                                    <button class="copy-btn" onclick="copyText(document.getElementById('cmd2').textContent, this)">&#x1F4CB; Copy</button>
-                                </div>
-                                <div class="terminal-body">
-                                    <code id="cmd2"><span class="cmd-comment"># Query your node's RPC for its public key</span>
-docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
-  -H 'Content-Type: application/json' \
-  -d '{"method":"server_info","params":[{}]}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
-                                </div>
-                            </div>
-                        </li>
-                        <li>
-                            <strong>Copy the output</strong> — it starts with <code>n9</code>
-                            <div class="terminal output">
-                                <div class="terminal-header">
-                                    <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
-                                    <span class="terminal-context">example output</span>
-                                </div>
-                                <div class="terminal-body">
-                                    <code>n9KbsDV8xeD9XaKZxEasvGMFGdhmH3bBaSBmFvDzVZQzBVfAWcFv</code>
-                                </div>
-                            </div>
-                        </li>
-                        <li>
-                            <strong>Paste it</strong> into the <strong>Node Public Key</strong> field above and submit.
-                        </li>
-                    </ol>
-                    <div class="reassurance">
-                        <strong>Is this safe?</strong> Your node key is your node's network identity — it's not secret.
-                        It's visible to every peer your node connects to. Sharing it here just lets us link your
-                        topology data (IP, latency, uptime) to your validator scores for a more accurate composite score.
-                    </div>
-                </div>
-
                 <label for="webhook_url">Discord Webhook URL <span style="color:#f85149">*</span></label>
                 <input type="text" id="webhook_url" name="webhook_url" placeholder="https://discord.com/api/webhooks/..." required>
 
@@ -201,21 +128,115 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
                 <a href="#" onclick="showManage(); return false;">Manage subscription</a>
             </div>
 
-            <!-- Manage subscription panel (hidden by default) -->
+            <!-- Manage subscription panel -->
             <div id="manage-panel" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid #30363d;">
                 <label for="manage_pk">Your Validator Public Key</label>
                 <input type="text" id="manage_pk" placeholder="nHD3sPmh...">
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
                     <button type="button" style="flex:1; min-width:120px; background:#21262d; font-size:0.9em; padding:10px;" onclick="doCheckStatus()">Check Status</button>
-                    <button type="button" style="flex:1; min-width:120px; background:#21262d; font-size:0.9em; padding:10px;" onclick="doUpdateNodeKey()">Add / Update Node Key</button>
                     <button type="button" style="flex:1; min-width:120px; background:#21262d; color:#f85149; font-size:0.9em; padding:10px;" onclick="doUnsubscribe()">Unsubscribe</button>
                 </div>
-                <div id="manage-nodekey-input" style="display:none; margin-top:12px;">
-                    <label for="manage_nk">Node Public Key</label>
-                    <input type="text" id="manage_nk" placeholder="n9KbsDV8xeD9...">
-                    <button type="button" style="background:#238636; font-size:0.9em; padding:10px;" onclick="doSaveNodeKey()">Save Node Key</button>
-                </div>
                 <div id="manage-status" class="status" style="margin-top:8px;"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="upgrade-prompt">
+                <div class="upgrade-title">🔓 Unlock Full Metrics — Link Your Node Key</div>
+                <div class="upgrade-body">
+                    Without your node key, your report card covers agreement scores and version — about 45% of the full picture.
+                    <strong>With it</strong>, you get latency, uptime, peer count, and geographic diversity scoring.
+                    Your composite score becomes more accurate, and you help improve the
+                    <a href="/network" style="color:#58a6ff">network diversity map</a> for the whole community.
+                </div>
+            </div>
+
+            <h3 style="margin-top:16px;">How to verify your node key</h3>
+            <p style="color:#8b949e; font-size:0.9em; margin-bottom:16px;">
+                To prevent anyone from claiming someone else's node, we verify you actually control it.
+                You run a single command <strong>from your validator server</strong> — because only you have SSH access,
+                and we can check that the request comes from your node's IP address.
+            </p>
+
+            <ol class="guide-steps">
+                <li>
+                    <strong>SSH into your validator server</strong>
+                    <div class="terminal">
+                        <div class="terminal-header">
+                            <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                            <span class="terminal-context">your local terminal</span>
+                            <button class="copy-btn" onclick="copyText('ssh root@YOUR_SERVER_IP', this)">&#x1F4CB; Copy</button>
+                        </div>
+                        <div class="terminal-body">
+                            <code>ssh root@YOUR_SERVER_IP</code>
+                        </div>
+                    </div>
+                    <p style="color:#484f58; font-size:0.82em;">Replace <code>YOUR_SERVER_IP</code> with your validator's IP address.</p>
+                </li>
+                <li>
+                    <strong>Get your node key</strong>
+                    <div class="terminal">
+                        <div class="terminal-header">
+                            <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                            <span class="terminal-context">on your validator server</span>
+                            <button class="copy-btn" onclick="copyText(document.getElementById('cmd-getkey').textContent, this)">&#x1F4CB; Copy</button>
+                        </div>
+                        <div class="terminal-body">
+                            <code id="cmd-getkey"><span class="cmd-comment"># Get your node's public key</span>
+docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
+  -H 'Content-Type: application/json' \
+  -d '{"method":"server_info","params":[{}]}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
+                        </div>
+                    </div>
+                    <p style="color:#484f58; font-size:0.82em;">This prints your node key — it starts with <code>n9</code>. Copy it for the next step.</p>
+                </li>
+                <li>
+                    <strong>Run the verification command</strong> — replace <code>YOUR_VALIDATOR_KEY</code> and <code>YOUR_NODE_KEY</code> with your actual keys
+                    <div class="terminal">
+                        <div class="terminal-header">
+                            <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                            <span class="terminal-context">on your validator server</span>
+                            <button class="copy-btn" onclick="copyText(document.getElementById('cmd-verify').textContent, this)">&#x1F4CB; Copy</button>
+                        </div>
+                        <div class="terminal-body">
+                            <code id="cmd-verify"><span class="cmd-comment"># Verify ownership — must be run from your validator server</span>
+curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
+  -H 'Content-Type: application/json' \
+  -d '{"validator_key":"YOUR_VALIDATOR_KEY","node_key":"YOUR_NODE_KEY"}'</code>
+                        </div>
+                    </div>
+                    <p style="color:#484f58; font-size:0.82em;">
+                        <strong>What this does:</strong> Sends your two keys to our API. We check that the request
+                        comes from the same IP address that the network knows your node lives at. Since only you
+                        have SSH access to your server, this proves you control the node.<br>
+                        <strong>What it does NOT do:</strong> It doesn't send passwords, private keys, or any secrets.
+                        Both keys are public identifiers — it's just verifying you're the one linking them.
+                    </p>
+                </li>
+                <li>
+                    <strong>Look for the success message</strong>
+                    <div class="terminal output">
+                        <div class="terminal-header">
+                            <div class="terminal-dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div>
+                            <span class="terminal-context">expected response</span>
+                        </div>
+                        <div class="terminal-body">
+                            <code>{"message":"Verified! Your node key has been linked to your validator..."}</code>
+                        </div>
+                    </div>
+                    <p style="color:#484f58; font-size:0.82em;">
+                        If you see an error about the IP not matching, make sure you're running the command
+                        on your validator server (not your laptop). The IP of the request must match your node's
+                        topology IP.
+                    </p>
+                </li>
+            </ol>
+
+            <div class="reassurance">
+                <strong>Is this safe?</strong> Both your validator key and node key are public identifiers — they're visible to
+                the entire network. This command doesn't expose any secrets. The only thing being verified is that you
+                have server access (SSH) to the machine running that node, which proves you're its operator.
             </div>
         </div>
 
@@ -270,17 +291,11 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
             const btn = document.getElementById('submit-btn');
             const status = document.getElementById('status');
             const pk = document.getElementById('public_key').value.trim();
-            const nodeKey = document.getElementById('node_public_key').value.trim();
             const webhook = document.getElementById('webhook_url').value.trim();
 
             if (!pk.startsWith('nH')) {
                 status.className = 'status error';
                 status.textContent = 'Invalid validator public key. Must start with nH...';
-                return false;
-            }
-            if (nodeKey && !nodeKey.startsWith('n9')) {
-                status.className = 'status error';
-                status.textContent = 'Invalid node key format. Node keys start with n9...';
                 return false;
             }
             if (!webhook.startsWith('https://discord.com/api/webhooks/')) {
@@ -296,7 +311,6 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
 
             try {
                 const body = {public_key: pk, webhook_url: webhook};
-                if (nodeKey) body.node_public_key = nodeKey;
                 const resp = await fetch('/api/alerts/subscribe', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -348,44 +362,23 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
                 const data = await resp.json();
                 if (resp.ok && data.subscription) {
                     const s = data.subscription;
-                    const nodeInfo = s.node_public_key
-                        ? 'Full metrics active (node key: ' + s.node_public_key.substring(0, 16) + '...)'
-                        : 'Basic metrics only — add your node key below for full scoring';
-                    showManageStatus((s.active ? 'Active' : 'Inactive') + ' | ' + nodeInfo + ' | Since: ' + s.created_at.substring(0, 10), s.node_public_key ? 'success' : 'info');
+                    let nodeInfo;
+                    let statusType;
+                    if (s.node_public_key && s.node_verified) {
+                        nodeInfo = 'Full metrics active — node key verified (' + s.node_public_key.substring(0, 16) + '...)';
+                        statusType = 'success';
+                    } else if (s.node_public_key) {
+                        nodeInfo = 'Node key pending verification (' + s.node_public_key.substring(0, 16) + '...)';
+                        statusType = 'info';
+                    } else {
+                        nodeInfo = 'Basic metrics only — verify your node key using the tutorial below';
+                        statusType = 'info';
+                    }
+                    showManageStatus((s.active ? 'Active' : 'Inactive') + ' | ' + nodeInfo + ' | Since: ' + s.created_at.substring(0, 10), statusType);
                 } else {
                     showManageStatus('No subscription found for this key.', 'error');
                 }
             } catch { showManageStatus('Error checking status.', 'error'); }
-        }
-
-        function doUpdateNodeKey() {
-            const pk = getManagePK();
-            if (!pk) return;
-            document.getElementById('manage-nodekey-input').style.display = 'block';
-        }
-
-        async function doSaveNodeKey() {
-            const pk = getManagePK();
-            if (!pk) return;
-            const nk = document.getElementById('manage_nk').value.trim();
-            if (!nk || !nk.startsWith('n9')) {
-                showManageStatus('Node key must start with n9...', 'error');
-                return;
-            }
-            try {
-                const resp = await fetch('/api/alerts/subscriptions/' + encodeURIComponent(pk), {
-                    method: 'PATCH',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({node_public_key: nk}),
-                });
-                const data = await resp.json();
-                if (resp.ok) {
-                    showManageStatus('Node key saved! Full metrics will appear after the next scoring round.', 'success');
-                    document.getElementById('manage-nodekey-input').style.display = 'none';
-                } else {
-                    showManageStatus(data.detail || 'Failed to update.', 'error');
-                }
-            } catch { showManageStatus('Error updating node key.', 'error'); }
         }
 
         async function doUnsubscribe() {

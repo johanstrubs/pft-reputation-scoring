@@ -237,13 +237,79 @@ async def unsubscribe(req: UnsubscribeRequest):
     return {"message": "Unsubscribed successfully."}
 
 
+class VerifyNodeRequest(BaseModel):
+    validator_key: str
+    node_key: str
+
+
+@app.post("/api/alerts/verify-node")
+async def verify_node(req: VerifyNodeRequest, request: Request):
+    """Verify node key ownership by checking the request comes from the node's IP."""
+    if not req.validator_key.startswith("nH"):
+        raise HTTPException(status_code=400, detail="Invalid validator key format. Must start with nH...")
+    if not req.node_key.startswith("n9"):
+        raise HTTPException(status_code=400, detail="Invalid node key format. Must start with n9...")
+
+    # Check subscription exists
+    sub = await db.get_subscription(req.validator_key)
+    if not sub:
+        raise HTTPException(status_code=404, detail="No subscription found for this validator key. Subscribe at /alerts first.")
+
+    # Check node key not claimed by someone else
+    if await db.is_node_key_claimed(req.node_key, exclude_validator=req.validator_key):
+        raise HTTPException(status_code=409, detail="This node key is already verified by another validator.")
+
+    # Get the caller's IP
+    caller_ip = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip() or request.client.host
+    logger.info("Node verification attempt: validator=%s node=%s caller_ip=%s", req.validator_key[:16], req.node_key[:16], caller_ip)
+
+    # Look up the expected IP for this node key from VHS topology
+    expected_ip = None
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{settings.vhs_base_url}/v1/network/topology/nodes")
+            if resp.status_code == 200:
+                data = resp.json()
+                nodes = data.get("nodes", data if isinstance(data, list) else [])
+                for node in nodes:
+                    if node.get("node_public_key") == req.node_key:
+                        expected_ip = node.get("ip")
+                        break
+    except Exception as e:
+        logger.error("Failed to fetch topology for verification: %s", e)
+        raise HTTPException(status_code=503, detail="Could not verify — topology service unavailable. Try again later.")
+
+    if not expected_ip:
+        raise HTTPException(status_code=400, detail="This node key was not found in the current network topology. Make sure your node is running.")
+
+    # Compare caller IP with topology IP
+    if caller_ip != expected_ip:
+        logger.warning("Node verification FAILED: caller=%s expected=%s for node=%s", caller_ip, expected_ip, req.node_key[:16])
+        raise HTTPException(
+            status_code=403,
+            detail=f"Verification failed. This request came from {caller_ip} but the network topology shows "
+                   f"node {req.node_key[:16]}... at {expected_ip}. Run this command from your validator server, not your local machine."
+        )
+
+    # Verified! Save the node key
+    await db.update_node_key(req.validator_key, req.node_key, verified=True)
+    logger.info("Node verification PASSED: validator=%s node=%s ip=%s", req.validator_key[:16], req.node_key[:16], caller_ip)
+    return {
+        "message": "Verified! Your node key has been linked to your validator. Full topology metrics will appear in your next daily report.",
+        "validator_key": req.validator_key,
+        "node_key": req.node_key,
+        "verified_ip": caller_ip,
+    }
+
+
 @app.patch("/api/alerts/subscriptions/{public_key}")
 async def update_subscription(public_key: str, req: UpdateNodeKeyRequest):
-    """Update the node key for an existing subscription."""
+    """Update the node key for an existing subscription (unverified — use verify-node for verified linking)."""
     if not req.node_public_key.startswith("n9"):
         raise HTTPException(status_code=400, detail="Invalid node key format. Must start with n9...")
     await _validate_node_key(req.node_public_key, public_key)
-    updated = await db.update_node_key(public_key, req.node_public_key)
+    updated = await db.update_node_key(public_key, req.node_public_key, verified=False)
     if not updated:
         raise HTTPException(status_code=404, detail="No active subscription found for this key")
     return {"message": "Node key updated! Full metrics will be available after the next scoring round."}
