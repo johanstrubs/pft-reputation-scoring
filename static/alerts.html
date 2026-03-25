@@ -198,9 +198,24 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
             </form>
             <div id="status" class="status"></div>
             <div class="manage-link">
-                <a href="#" onclick="showCheckStatus(); return false;">Check subscription status</a> &middot;
-                <a href="#" onclick="showUnsubscribe(); return false;">Unsubscribe</a> &middot;
-                <a href="#" onclick="showUpdateNodeKey(); return false;">Update node key</a>
+                <a href="#" onclick="showManage(); return false;">Manage subscription</a>
+            </div>
+
+            <!-- Manage subscription panel (hidden by default) -->
+            <div id="manage-panel" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid #30363d;">
+                <label for="manage_pk">Your Validator Public Key</label>
+                <input type="text" id="manage_pk" placeholder="nHD3sPmh...">
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="button" style="flex:1; min-width:120px; background:#21262d; font-size:0.9em; padding:10px;" onclick="doCheckStatus()">Check Status</button>
+                    <button type="button" style="flex:1; min-width:120px; background:#21262d; font-size:0.9em; padding:10px;" onclick="doUpdateNodeKey()">Add / Update Node Key</button>
+                    <button type="button" style="flex:1; min-width:120px; background:#21262d; color:#f85149; font-size:0.9em; padding:10px;" onclick="doUnsubscribe()">Unsubscribe</button>
+                </div>
+                <div id="manage-nodekey-input" style="display:none; margin-top:12px;">
+                    <label for="manage_nk">Node Public Key</label>
+                    <input type="text" id="manage_nk" placeholder="n9KbsDV8xeD9...">
+                    <button type="button" style="background:#238636; font-size:0.9em; padding:10px;" onclick="doSaveNodeKey()">Save Node Key</button>
+                </div>
+                <div id="manage-status" class="status" style="margin-top:8px;"></div>
             </div>
         </div>
 
@@ -305,30 +320,78 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
             return false;
         }
 
-        async function showCheckStatus() {
-            const pk = prompt('Enter your validator public key:');
+        function showManage() {
+            const panel = document.getElementById('manage-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function showManageStatus(msg, type) {
+            const el = document.getElementById('manage-status');
+            el.className = 'status ' + type;
+            el.textContent = msg;
+        }
+
+        function getManagePK() {
+            const pk = document.getElementById('manage_pk').value.trim();
+            if (!pk || !pk.startsWith('nH')) {
+                showManageStatus('Enter your validator public key (starts with nH...)', 'error');
+                return null;
+            }
+            return pk;
+        }
+
+        async function doCheckStatus() {
+            const pk = getManagePK();
             if (!pk) return;
             try {
                 const resp = await fetch('/api/alerts/status/' + encodeURIComponent(pk));
                 const data = await resp.json();
                 if (resp.ok && data.subscription) {
                     const s = data.subscription;
-                    const nodeStatus = s.node_public_key
-                        ? '✅ Full metrics active (node key: ' + s.node_public_key.substring(0, 12) + '...)'
-                        : '⚠️ Basic metrics only — add your node key for full scoring';
-                    alert('Status: ' + (s.active ? 'Active' : 'Inactive') +
-                          '\n' + nodeStatus +
-                          '\nSubscribed since: ' + s.created_at);
+                    const nodeInfo = s.node_public_key
+                        ? 'Full metrics active (node key: ' + s.node_public_key.substring(0, 16) + '...)'
+                        : 'Basic metrics only — add your node key below for full scoring';
+                    showManageStatus((s.active ? 'Active' : 'Inactive') + ' | ' + nodeInfo + ' | Since: ' + s.created_at.substring(0, 10), s.node_public_key ? 'success' : 'info');
                 } else {
-                    alert('No subscription found for this key.');
+                    showManageStatus('No subscription found for this key.', 'error');
                 }
-            } catch { alert('Error checking status.'); }
+            } catch { showManageStatus('Error checking status.', 'error'); }
         }
 
-        async function showUnsubscribe() {
-            const pk = prompt('Enter your validator public key to unsubscribe:');
+        function doUpdateNodeKey() {
+            const pk = getManagePK();
             if (!pk) return;
-            if (!confirm('Are you sure you want to unsubscribe ' + pk.substring(0, 16) + '...?')) return;
+            document.getElementById('manage-nodekey-input').style.display = 'block';
+        }
+
+        async function doSaveNodeKey() {
+            const pk = getManagePK();
+            if (!pk) return;
+            const nk = document.getElementById('manage_nk').value.trim();
+            if (!nk || !nk.startsWith('n9')) {
+                showManageStatus('Node key must start with n9...', 'error');
+                return;
+            }
+            try {
+                const resp = await fetch('/api/alerts/subscriptions/' + encodeURIComponent(pk), {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({node_public_key: nk}),
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    showManageStatus('Node key saved! Full metrics will appear after the next scoring round.', 'success');
+                    document.getElementById('manage-nodekey-input').style.display = 'none';
+                } else {
+                    showManageStatus(data.detail || 'Failed to update.', 'error');
+                }
+            } catch { showManageStatus('Error updating node key.', 'error'); }
+        }
+
+        async function doUnsubscribe() {
+            const pk = getManagePK();
+            if (!pk) return;
+            if (!confirm('Unsubscribe ' + pk.substring(0, 16) + '...?')) return;
             try {
                 const resp = await fetch('/api/alerts/unsubscribe', {
                     method: 'POST',
@@ -336,25 +399,8 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
                     body: JSON.stringify({public_key: pk}),
                 });
                 const data = await resp.json();
-                alert(data.message || (resp.ok ? 'Unsubscribed.' : 'Not found.'));
-            } catch { alert('Error unsubscribing.'); }
-        }
-
-        async function showUpdateNodeKey() {
-            const pk = prompt('Enter your validator public key:');
-            if (!pk) return;
-            const nodeKey = prompt('Enter your node public key (starts with n9...):');
-            if (!nodeKey) return;
-            if (!nodeKey.startsWith('n9')) { alert('Node keys start with n9...'); return; }
-            try {
-                const resp = await fetch('/api/alerts/subscriptions/' + encodeURIComponent(pk), {
-                    method: 'PATCH',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({node_public_key: nodeKey}),
-                });
-                const data = await resp.json();
-                alert(data.message || (resp.ok ? 'Node key updated!' : 'Failed.'));
-            } catch { alert('Error updating node key.'); }
+                showManageStatus(resp.ok ? 'Unsubscribed successfully.' : (data.detail || 'Not found.'), resp.ok ? 'success' : 'error');
+            } catch { showManageStatus('Error unsubscribing.', 'error'); }
         }
     </script>
 </body>
