@@ -50,13 +50,13 @@
         .terminal-dots .dot-red { background: #ff5f57; }
         .terminal-dots .dot-yellow { background: #febc2e; }
         .terminal-dots .dot-green { background: #28c840; }
-        .terminal-context { color: #484f58; font-size: 0.78em; }
-        .copy-btn { background: none; border: none; color: #484f58; cursor: pointer; font-size: 0.78em; display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; }
+        .terminal-context { color: #8b949e; font-size: 0.78em; }
+        .copy-btn { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 0.78em; display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; }
         .copy-btn:hover { color: #c9d1d9; background: #30363d; }
         .copy-btn.copied { color: #3fb950; }
         .terminal-body { padding: 16px; overflow-x: auto; }
         .terminal-body code { background: none; padding: 0; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; display: block; color: #c9d1d9; line-height: 1.7; font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
-        .terminal-body .cmd-comment { color: #484f58; }
+        .terminal-body .cmd-comment { color: #6e7681; }
         /* Output-only terminal (no copy, muted) */
         .terminal.output .terminal-body code { color: #8b949e; }
         /* Collapsible tutorial */
@@ -171,7 +171,7 @@
                             <code>ssh root@YOUR_SERVER_IP</code>
                         </div>
                     </div>
-                    <p style="color:#484f58; font-size:0.82em;">Replace <code>YOUR_SERVER_IP</code> with your validator's IP address.</p>
+                    <p style="color:#8b949e; font-size:0.82em;">Replace <code>YOUR_SERVER_IP</code> with your validator's IP address.</p>
                 </li>
                 <li>
                     <strong>Get your node key</strong>
@@ -189,7 +189,7 @@ docker exec postfiatd curl -s -X POST http://127.0.0.1:5005 \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['info']['pubkey_node'])"</code>
                         </div>
                     </div>
-                    <p style="color:#484f58; font-size:0.82em;">This prints your node key — it starts with <code>n9</code>. Copy it for the next step.</p>
+                    <p style="color:#8b949e; font-size:0.82em;">This prints your node key — it starts with <code>n9</code>. Copy it for the next step.</p>
                 </li>
                 <li>
                     <strong>Run the verification command</strong> — replace <code>YOUR_VALIDATOR_KEY</code> and <code>YOUR_NODE_KEY</code> with your actual keys
@@ -206,7 +206,7 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
   -d '{"validator_key":"YOUR_VALIDATOR_KEY","node_key":"YOUR_NODE_KEY"}'</code>
                         </div>
                     </div>
-                    <p style="color:#484f58; font-size:0.82em;">
+                    <p style="color:#8b949e; font-size:0.82em;">
                         <strong>What this does:</strong> Sends your two keys to our API. We check that the request
                         comes from the same IP address that the network knows your node lives at. Since only you
                         have SSH access to your server, this proves you control the node.<br>
@@ -225,7 +225,7 @@ curl -X POST https://dashboard.pftoligarchy.com/api/alerts/verify-node \
                             <code>{"message":"Verified! Your node key has been linked to your validator..."}</code>
                         </div>
                     </div>
-                    <p style="color:#484f58; font-size:0.82em;">
+                    <p style="color:#8b949e; font-size:0.82em;">
                         If you see an error about the IP not matching, make sure you're running the command
                         on your validator server (not your laptop). The IP of the request must match your node's
                         topology IP.
