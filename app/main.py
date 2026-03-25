@@ -165,6 +165,33 @@ class UpdateNodeKeyRequest(BaseModel):
     node_public_key: str
 
 
+async def _validate_node_key(node_key: str, validator_key: str | None = None):
+    """Validate a node key: must exist in topology, must not be claimed by another validator."""
+    # Check it's not already claimed by someone else
+    if await db.is_node_key_claimed(node_key, exclude_validator=validator_key):
+        raise HTTPException(status_code=409, detail="This node key is already claimed by another validator.")
+
+    # Check it exists in the current VHS topology
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{settings.vhs_base_url}/v1/network/topology/nodes")
+            if resp.status_code == 200:
+                data = resp.json()
+                nodes = data.get("nodes", data if isinstance(data, list) else [])
+                topology_keys = {n.get("node_public_key") for n in nodes if n.get("node_public_key")}
+                if node_key not in topology_keys:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="This node key was not found in the current network topology. "
+                               "Make sure your node is running and connected to the network, then try again."
+                    )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # If topology check fails, allow it through — don't block on VHS errors
+
+
 @app.get("/alerts")
 async def alerts_page():
     return FileResponse(os.path.join(STATIC_DIR, "alerts.html"))
@@ -180,6 +207,8 @@ async def subscribe(req: SubscribeRequest):
         raise HTTPException(status_code=400, detail="Invalid Discord webhook URL")
     if req.node_public_key and not req.node_public_key.startswith("n9"):
         raise HTTPException(status_code=400, detail="Invalid node key format. Must start with n9...")
+    if req.node_public_key:
+        await _validate_node_key(req.node_public_key, req.public_key)
 
     is_new = await db.add_subscription(req.public_key, req.webhook_url, req.node_public_key)
     if not is_new:
@@ -213,6 +242,7 @@ async def update_subscription(public_key: str, req: UpdateNodeKeyRequest):
     """Update the node key for an existing subscription."""
     if not req.node_public_key.startswith("n9"):
         raise HTTPException(status_code=400, detail="Invalid node key format. Must start with n9...")
+    await _validate_node_key(req.node_public_key, public_key)
     updated = await db.update_node_key(public_key, req.node_public_key)
     if not updated:
         raise HTTPException(status_code=404, detail="No active subscription found for this key")

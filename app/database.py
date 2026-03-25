@@ -379,6 +379,21 @@ class Database:
             rows = await cursor.fetchall()
             return {r[0]: r[1] for r in rows}
 
+    async def is_node_key_claimed(self, node_public_key: str, exclude_validator: str | None = None) -> bool:
+        """Check if a node key is already claimed by another validator."""
+        async with aiosqlite.connect(self.db_path) as db:
+            if exclude_validator:
+                cursor = await db.execute(
+                    "SELECT 1 FROM subscriptions WHERE node_public_key = ? AND public_key != ? AND active = 1 LIMIT 1",
+                    (node_public_key, exclude_validator),
+                )
+            else:
+                cursor = await db.execute(
+                    "SELECT 1 FROM subscriptions WHERE node_public_key = ? AND active = 1 LIMIT 1",
+                    (node_public_key,),
+                )
+            return await cursor.fetchone() is not None
+
     async def unsubscribe(self, public_key: str) -> bool:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
