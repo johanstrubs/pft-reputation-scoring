@@ -373,16 +373,18 @@ async def network_topology():
         for provider, count in provider_counts.most_common()
     ]
 
-    # Concentration warnings
+    # Concentration warnings (deduplicated — provider covers ASN for same entity)
     warnings = []
+    warned_providers = set()
     for entry in by_provider:
         if entry["pct"] > 33:
             warnings.append(f"{entry['provider']} hosts {entry['pct']}% of enriched validators (threshold: 33%)")
+            warned_providers.add(entry["provider"])
     for entry in by_country:
         if entry["pct"] > 33:
             warnings.append(f"{entry['pct']}% of enriched validators are in {entry['country']} (threshold: 33%)")
     for entry in by_asn:
-        if entry["pct"] > 33:
+        if entry["pct"] > 33 and entry.get("isp") not in warned_providers:
             warnings.append(f"ASN {entry['asn']} ({entry['isp']}) has {entry['pct']}% of enriched validators (threshold: 33%)")
 
     return {

@@ -123,6 +123,11 @@
             try {
                 const resp = await fetch('/api/network/topology');
                 const data = await resp.json();
+                // Clear previous content before re-rendering
+                document.getElementById('warnings-container').innerHTML = '';
+                ['provider-table', 'country-table', 'asn-table'].forEach(id => document.getElementById(id).innerHTML = '');
+                document.getElementById('enriched-list').innerHTML = '';
+                document.getElementById('unenriched-list').innerHTML = '';
                 render(data);
             } catch (e) {
                 document.getElementById('loading').textContent = 'Failed to load topology data.';
