@@ -56,17 +56,15 @@ class DataCollector:
     def __init__(self):
         self._asn_cache: dict[str, dict] = {}
         self._node_map = NodeValidatorMap()
-        # Load manual key mappings from config
-        for node_key, master_key in settings.key_mapping_pairs.items():
-            self._node_map.add(node_key, master_key, source="manual_config")
-        if settings.key_mapping_pairs:
-            logger.info("Loaded %d manual key mappings from config", len(settings.key_mapping_pairs))
 
-    async def collect(self) -> tuple[list[ValidatorSnapshot], list[dict]]:
+    async def collect(self, subscriber_mappings: dict[str, str] | None = None) -> tuple[list[ValidatorSnapshot], list[dict]]:
         """Collect validator data. Returns (snapshots, poll_results).
 
         poll_results is a list of {public_key, successful, latency_ms} dicts
         tracking whether each validator was reachable this round.
+
+        subscriber_mappings: verified node_key -> master_key pairs from the
+        subscription system, inserted between crawl and DNS in the priority chain.
         """
         snapshots: dict[str, ValidatorSnapshot] = {}
         poll_results: list[dict] = []
@@ -144,9 +142,24 @@ class DataCollector:
             await self._probe_topology_nodes(topology_nodes, signing_to_master, snapshots)
             self._node_map.mark_probed()
 
-        # Correlation Step 3: DNS resolution of validator domains -> match topology IPs
+        # Correlation Step 3: Subscriber-provided verified node keys (fills gaps from crawl/RPC)
+        if subscriber_mappings:
+            loaded = 0
+            for node_key, master_key in subscriber_mappings.items():
+                if not self._node_map.get_master_key(node_key):
+                    self._node_map.add(node_key, master_key, source="subscriber")
+                    loaded += 1
+            if loaded:
+                logger.info("Loaded %d subscriber node key mappings (filling gaps)", loaded)
+
+        # Correlation Step 4: DNS resolution of validator domains -> match topology IPs
         if topology_nodes:
             await self._resolve_domains_to_topology(snapshots, topology_nodes)
+
+        # Correlation Step 5: Manual key mappings (last-resort fallback, only fills gaps)
+        for node_key, master_key in settings.key_mapping_pairs.items():
+            if not self._node_map.get_master_key(node_key):
+                self._node_map.add(node_key, master_key, source="manual_config")
 
         # Now enrich validators with topology data using the mapping
         ip_by_master: dict[str, str] = {}

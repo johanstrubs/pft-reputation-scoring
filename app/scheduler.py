@@ -16,14 +16,12 @@ async def run_scoring_round(collector: DataCollector, scorer: ReputationScorer, 
     try:
         logger.info("Starting scoring round...")
 
-        # Load subscriber-provided node key mappings into collector
+        # Load subscriber-provided node key mappings to pass into collect()
         subscriber_mappings = await db.get_subscriber_key_mappings()
-        for node_key, master_key in subscriber_mappings.items():
-            collector._node_map.add(node_key, master_key, source="subscriber")
         if subscriber_mappings:
-            logger.info("Loaded %d subscriber node key mappings", len(subscriber_mappings))
+            logger.info("Found %d verified subscriber node key mappings", len(subscriber_mappings))
 
-        snapshots, poll_results = await collector.collect()
+        snapshots, poll_results = await collector.collect(subscriber_mappings=subscriber_mappings)
         if not snapshots:
             logger.warning("No validator data collected, skipping scoring round")
             return None

@@ -55,6 +55,7 @@ class ScoresResponse(BaseModel):
     timestamp: str
     methodology_version: str
     validator_count: int
+    enrichment_coverage: dict | None = None
     validators: list[ValidatorScore]
 
 

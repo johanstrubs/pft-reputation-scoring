@@ -76,11 +76,19 @@ async def get_scores():
     round_id, round_ts, scores = await db.get_latest_scores()
     if round_id is None:
         raise HTTPException(status_code=503, detail="No scoring data available yet")
+    enriched = [s for s in scores if s.metrics.latency_ms is not None and s.metrics.uptime_seconds is not None
+                and s.metrics.peer_count is not None and s.metrics.country is not None and s.metrics.asn is not None]
     return ScoresResponse(
         round_id=round_id,
         timestamp=round_ts,
         methodology_version=settings.methodology_version,
         validator_count=len(scores),
+        enrichment_coverage={
+            "total_validators": len(scores),
+            "enriched": len(enriched),
+            "unenriched": len(scores) - len(enriched),
+            "coverage_pct": round(100 * len(enriched) / len(scores), 1) if scores else 0,
+        },
         validators=scores,
     )
 
@@ -334,8 +342,14 @@ async def network_topology():
         raise HTTPException(status_code=503, detail="No scoring data available yet")
 
     total = len(scores)
-    enriched = [s for s in scores if s.metrics.asn is not None or s.metrics.country is not None]
-    unenriched = [s for s in scores if s.metrics.asn is None and s.metrics.country is None]
+
+    def is_fully_enriched(s):
+        m = s.metrics
+        return (m.latency_ms is not None and m.uptime_seconds is not None
+                and m.peer_count is not None and m.country is not None and m.asn is not None)
+
+    enriched = [s for s in scores if is_fully_enriched(s)]
+    unenriched = [s for s in scores if not is_fully_enriched(s)]
 
     # Build validator list
     validators = []
@@ -343,7 +357,8 @@ async def network_topology():
         validators.append({
             "public_key": s.public_key,
             "domain": s.domain,
-            "enriched": s.metrics.asn is not None or s.metrics.country is not None,
+            "server_version": s.metrics.server_version,
+            "enriched": is_fully_enriched(s),
             "asn": s.metrics.asn,
             "isp": s.metrics.isp,
             "country": s.metrics.country,
