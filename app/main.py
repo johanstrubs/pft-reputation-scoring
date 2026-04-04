@@ -15,6 +15,7 @@ from app.collector import DataCollector
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.digest import generate_and_store_weekly_digest
+from app.incidents import inject_synthetic_incident
 from app.scheduler import start_scheduler
 from app.models import (
     ScoresResponse,
@@ -23,6 +24,8 @@ from app.models import (
     MethodologyResponse,
     WeeklyDigestResponse,
     WeeklyDigestHistoryResponse,
+    IncidentResponse,
+    IncidentListResponse,
 )
 
 logging.basicConfig(
@@ -180,6 +183,50 @@ async def trigger_weekly_digest():
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return WeeklyDigestResponse(**digest)
+
+
+class IncidentTestRequest(BaseModel):
+    validator_key: str
+
+
+@app.get("/api/incidents", response_model=IncidentListResponse)
+async def get_incidents(
+    validator_key: str | None = None,
+    severity: str | None = None,
+    event_type: str | None = None,
+    status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 100,
+):
+    incidents = await db.get_incidents(
+        validator_key=validator_key,
+        severity=severity,
+        event_type=event_type,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        limit=min(limit, 200),
+    )
+    return IncidentListResponse(incidents=[IncidentResponse(**incident) for incident in incidents])
+
+
+@app.get("/api/incidents/{incident_id}", response_model=IncidentResponse)
+async def get_incident(incident_id: int):
+    incident = await db.get_incident(incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    incident["events"] = await db.get_incident_events(incident_id)
+    return IncidentResponse(**incident)
+
+
+@app.post("/api/incidents/test", response_model=IncidentResponse)
+async def create_synthetic_incident(req: IncidentTestRequest):
+    if not req.validator_key or len(req.validator_key) < 10:
+        raise HTTPException(status_code=400, detail="Invalid validator key")
+    incident = await inject_synthetic_incident(db, req.validator_key)
+    incident["events"] = await db.get_incident_events(incident["id"])
+    return IncidentResponse(**incident)
 
 
 # --- Alerts & Subscriptions ---
@@ -462,6 +509,11 @@ async def leaderboard():
 @app.get("/simulator")
 async def simulator():
     return FileResponse(os.path.join(STATIC_DIR, "simulator.html"))
+
+
+@app.get("/incidents")
+async def incidents_page():
+    return FileResponse(os.path.join(STATIC_DIR, "incidents.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

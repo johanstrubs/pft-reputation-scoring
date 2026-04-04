@@ -7,6 +7,7 @@ from app.scorer import ReputationScorer
 from app.database import Database
 from app.config import settings
 from app.digest import generate_and_store_weekly_digest
+from app.incidents import detect_and_store_incidents
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,11 @@ async def run_scoring_round(collector: DataCollector, scorer: ReputationScorer, 
             await check_critical_alerts(db, scores)
         except Exception:
             logger.exception("Critical alert check failed")
+
+        try:
+            await detect_and_store_incidents(db, round_id)
+        except Exception:
+            logger.exception("Incident detection failed for round %d", round_id)
 
         return round_id
     except Exception:

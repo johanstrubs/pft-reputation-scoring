@@ -99,6 +99,50 @@ CREATE TABLE IF NOT EXISTS weekly_digests (
 );
 
 CREATE INDEX IF NOT EXISTS idx_weekly_digests_created_at ON weekly_digests(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS incidents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    validator_key TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    status TEXT NOT NULL,
+    synthetic BOOLEAN DEFAULT 0,
+    correlated BOOLEAN DEFAULT 0,
+    summary TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT,
+    duration_seconds INTEGER,
+    latest_round_id INTEGER,
+    latest_event_time TEXT NOT NULL,
+    event_types_json TEXT NOT NULL,
+    active_event_types_json TEXT NOT NULL,
+    before_values_json TEXT,
+    during_values_json TEXT,
+    after_values_json TEXT,
+    FOREIGN KEY (latest_round_id) REFERENCES scoring_rounds(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidents_validator ON incidents(validator_key);
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
+CREATE INDEX IF NOT EXISTS idx_incidents_start_time ON incidents(start_time DESC);
+
+CREATE TABLE IF NOT EXISTS incident_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id INTEGER NOT NULL,
+    round_id INTEGER,
+    validator_key TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    event_phase TEXT NOT NULL,
+    synthetic BOOLEAN DEFAULT 0,
+    correlated BOOLEAN DEFAULT 0,
+    created_at TEXT NOT NULL,
+    current_values_json TEXT NOT NULL,
+    previous_values_json TEXT,
+    FOREIGN KEY (incident_id) REFERENCES incidents(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_incident_events_incident ON incident_events(incident_id);
+CREATE INDEX IF NOT EXISTS idx_incident_events_validator ON incident_events(validator_key);
 """
 
 
@@ -695,3 +739,277 @@ class Database:
             "message_id": row["message_id"],
             "payload": json.loads(row["payload_json"]),
         }
+
+    async def get_recent_round_summaries(self, limit: int = 3) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT id, timestamp, validator_count, avg_score, min_score, max_score FROM scoring_rounds ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_open_incidents(self) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM incidents WHERE status = 'open' ORDER BY start_time DESC"
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_incident(row, include_events=False) for row in rows]
+
+    async def create_incident(
+        self,
+        *,
+        validator_key: str,
+        severity: str,
+        status: str,
+        summary: str,
+        start_time: str,
+        latest_round_id: int | None,
+        latest_event_time: str,
+        event_types: list[str],
+        active_event_types: list[str],
+        before_values: dict | None = None,
+        during_values: dict | None = None,
+        after_values: dict | None = None,
+        synthetic: bool = False,
+        correlated: bool = False,
+        end_time: str | None = None,
+    ) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """INSERT INTO incidents
+                   (validator_key, severity, status, synthetic, correlated, summary, start_time, end_time,
+                    duration_seconds, latest_round_id, latest_event_time, event_types_json, active_event_types_json,
+                    before_values_json, during_values_json, after_values_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    validator_key,
+                    severity,
+                    status,
+                    int(synthetic),
+                    int(correlated),
+                    summary,
+                    start_time,
+                    end_time,
+                    self._duration_seconds(start_time, end_time),
+                    latest_round_id,
+                    latest_event_time,
+                    json.dumps(event_types),
+                    json.dumps(active_event_types),
+                    json.dumps(before_values) if before_values is not None else None,
+                    json.dumps(during_values) if during_values is not None else None,
+                    json.dumps(after_values) if after_values is not None else None,
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def update_incident(
+        self,
+        incident_id: int,
+        *,
+        severity: str,
+        status: str,
+        summary: str,
+        latest_round_id: int | None,
+        latest_event_time: str,
+        event_types: list[str],
+        active_event_types: list[str],
+        before_values: dict | None = None,
+        during_values: dict | None = None,
+        after_values: dict | None = None,
+        correlated: bool = False,
+        end_time: str | None = None,
+    ):
+        incident = await self.get_incident(incident_id)
+        start_time = incident["start_time"] if incident else latest_event_time
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """UPDATE incidents
+                   SET severity = ?, status = ?, summary = ?, latest_round_id = ?, latest_event_time = ?,
+                       event_types_json = ?, active_event_types_json = ?, before_values_json = ?, during_values_json = ?,
+                       after_values_json = ?, correlated = ?, end_time = ?, duration_seconds = ?
+                   WHERE id = ?""",
+                (
+                    severity,
+                    status,
+                    summary,
+                    latest_round_id,
+                    latest_event_time,
+                    json.dumps(event_types),
+                    json.dumps(active_event_types),
+                    json.dumps(before_values) if before_values is not None else None,
+                    json.dumps(during_values) if during_values is not None else None,
+                    json.dumps(after_values) if after_values is not None else None,
+                    int(correlated),
+                    end_time,
+                    self._duration_seconds(start_time, end_time),
+                    incident_id,
+                ),
+            )
+            await db.commit()
+
+    async def add_incident_event(
+        self,
+        *,
+        incident_id: int,
+        validator_key: str,
+        event_type: str,
+        severity: str,
+        event_phase: str,
+        current_values: dict,
+        previous_values: dict | None = None,
+        round_id: int | None = None,
+        synthetic: bool = False,
+        correlated: bool = False,
+        created_at: str | None = None,
+    ) -> int:
+        created_at = created_at or datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """INSERT INTO incident_events
+                   (incident_id, round_id, validator_key, event_type, severity, event_phase, synthetic, correlated,
+                    created_at, current_values_json, previous_values_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    incident_id,
+                    round_id,
+                    validator_key,
+                    event_type,
+                    severity,
+                    event_phase,
+                    int(synthetic),
+                    int(correlated),
+                    created_at,
+                    json.dumps(current_values),
+                    json.dumps(previous_values) if previous_values is not None else None,
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_incidents(
+        self,
+        *,
+        validator_key: str | None = None,
+        severity: str | None = None,
+        event_type: str | None = None,
+        status: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        clauses = []
+        params: list = []
+        if validator_key:
+            clauses.append("validator_key = ?")
+            params.append(validator_key)
+        if severity:
+            clauses.append("severity = ?")
+            params.append(severity)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if date_from:
+            clauses.append("start_time >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("start_time <= ?")
+            params.append(date_to)
+        sql = "SELECT * FROM incidents"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY start_time DESC LIMIT ?"
+        params.append(limit)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(sql, tuple(params))
+            rows = await cursor.fetchall()
+        incidents = [self._row_to_incident(row, include_events=False) for row in rows]
+        if event_type:
+            incidents = [incident for incident in incidents if event_type in incident["event_types"]]
+        return incidents
+
+    async def get_incident(self, incident_id: int) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM incidents WHERE id = ?",
+                (incident_id,),
+            )
+            row = await cursor.fetchone()
+        return self._row_to_incident(row, include_events=True) if row else None
+
+    async def get_latest_active_incident_for_validator(self, validator_key: str) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM incidents WHERE validator_key = ? AND status = 'open' ORDER BY latest_event_time DESC LIMIT 1",
+                (validator_key,),
+            )
+            row = await cursor.fetchone()
+        return self._row_to_incident(row, include_events=True) if row else None
+
+    async def get_incident_events(self, incident_id: int) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM incident_events WHERE incident_id = ? ORDER BY created_at ASC, id ASC",
+                (incident_id,),
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_incident_event(row) for row in rows]
+
+    @staticmethod
+    def _row_to_incident(row, include_events: bool = False) -> dict:
+        if row is None:
+            return None
+        incident = {
+            "id": row["id"],
+            "validator_key": row["validator_key"],
+            "severity": row["severity"],
+            "status": row["status"],
+            "synthetic": bool(row["synthetic"]),
+            "correlated": bool(row["correlated"]),
+            "summary": row["summary"],
+            "start_time": row["start_time"],
+            "end_time": row["end_time"],
+            "duration_seconds": row["duration_seconds"],
+            "event_types": json.loads(row["event_types_json"]),
+            "active_event_types": json.loads(row["active_event_types_json"]),
+            "latest_round_id": row["latest_round_id"],
+            "latest_event_time": row["latest_event_time"],
+            "before_values": json.loads(row["before_values_json"]) if row["before_values_json"] else None,
+            "during_values": json.loads(row["during_values_json"]) if row["during_values_json"] else None,
+            "after_values": json.loads(row["after_values_json"]) if row["after_values_json"] else None,
+        }
+        if include_events:
+            incident["events"] = []
+        return incident
+
+    @staticmethod
+    def _row_to_incident_event(row) -> dict:
+        return {
+            "id": row["id"],
+            "incident_id": row["incident_id"],
+            "round_id": row["round_id"],
+            "validator_key": row["validator_key"],
+            "event_type": row["event_type"],
+            "severity": row["severity"],
+            "event_phase": row["event_phase"],
+            "synthetic": bool(row["synthetic"]),
+            "correlated": bool(row["correlated"]),
+            "created_at": row["created_at"],
+            "current_values": json.loads(row["current_values_json"]),
+            "previous_values": json.loads(row["previous_values_json"]) if row["previous_values_json"] else None,
+        }
+
+    @staticmethod
+    def _duration_seconds(start_time: str, end_time: str | None) -> int | None:
+        if not start_time or not end_time:
+            return None
+        return int((datetime.fromisoformat(end_time) - datetime.fromisoformat(start_time)).total_seconds())

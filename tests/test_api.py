@@ -104,6 +104,15 @@ async def test_simulator_page():
 
 
 @pytest.mark.anyio
+async def test_incidents_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/incidents")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_network_topology_includes_version_and_strict_enrichment(mock_scores):
     partial = ValidatorScore(
         public_key="nHPartial",
@@ -186,3 +195,86 @@ async def test_trigger_digest_endpoint():
             resp = await client.post("/api/digest/trigger")
     assert resp.status_code == 200
     assert resp.json()["message_id"] == "msg-2"
+
+
+@pytest.mark.anyio
+async def test_incidents_list_endpoint():
+    transport = ASGITransport(app=app)
+    incidents = [{
+        "id": 1,
+        "validator_key": "nHIncident1",
+        "severity": "warning",
+        "status": "open",
+        "synthetic": False,
+        "correlated": False,
+        "summary": "Peer count collapse - nHIncident1...",
+        "start_time": "2026-04-04T12:00:00+00:00",
+        "end_time": None,
+        "duration_seconds": None,
+        "event_types": ["peer_collapse"],
+        "active_event_types": ["peer_collapse"],
+        "latest_round_id": 12,
+        "latest_event_time": "2026-04-04T12:00:00+00:00",
+        "before_values": {"peer_count": 10},
+        "during_values": {"peer_count": 2},
+        "after_values": None,
+    }]
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_incidents", new_callable=AsyncMock, return_value=incidents):
+            resp = await client.get("/api/incidents?status=open")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["incidents"][0]["validator_key"] == "nHIncident1"
+    assert data["incidents"][0]["event_types"] == ["peer_collapse"]
+
+
+@pytest.mark.anyio
+async def test_incident_detail_and_synthetic_endpoint():
+    transport = ASGITransport(app=app)
+    incident = {
+        "id": 9,
+        "validator_key": "nHSynthetic1",
+        "severity": "warning",
+        "status": "closed",
+        "synthetic": True,
+        "correlated": False,
+        "summary": "[Synthetic] Synthetic incident injected for verification - nHSynthetic1...",
+        "start_time": "2026-04-04T12:00:00+00:00",
+        "end_time": "2026-04-04T12:15:00+00:00",
+        "duration_seconds": 900,
+        "event_types": ["synthetic_test"],
+        "active_event_types": [],
+        "latest_round_id": None,
+        "latest_event_time": "2026-04-04T12:15:00+00:00",
+        "before_values": {"peer_count": 12},
+        "during_values": {"peer_count": 2},
+        "after_values": {"status": "recovered"},
+    }
+    events = [{
+        "id": 10,
+        "incident_id": 9,
+        "round_id": None,
+        "validator_key": "nHSynthetic1",
+        "event_type": "synthetic_test",
+        "severity": "warning",
+        "event_phase": "triggered",
+        "synthetic": True,
+        "correlated": False,
+        "created_at": "2026-04-04T12:00:00+00:00",
+        "current_values": {"peer_count": 2},
+        "previous_values": {"peer_count": 12},
+    }]
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_incident", new_callable=AsyncMock, return_value=incident), \
+             patch.object(db, "get_incident_events", new_callable=AsyncMock, return_value=events):
+            detail_resp = await client.get("/api/incidents/9")
+        with patch("app.main.inject_synthetic_incident", new_callable=AsyncMock, return_value=incident), \
+             patch.object(db, "get_incident_events", new_callable=AsyncMock, return_value=events):
+            synthetic_resp = await client.post("/api/incidents/test", json={"validator_key": "nHSynthetic1"})
+
+    assert detail_resp.status_code == 200
+    assert detail_resp.json()["events"][0]["event_phase"] == "triggered"
+    assert synthetic_resp.status_code == 200
+    assert synthetic_resp.json()["synthetic"] is True

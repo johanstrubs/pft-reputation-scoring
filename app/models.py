@@ -98,3 +98,43 @@ class WeeklyDigestResponse(BaseModel):
 
 class WeeklyDigestHistoryResponse(BaseModel):
     digests: list[WeeklyDigestResponse]
+
+
+class IncidentEventResponse(BaseModel):
+    id: int
+    incident_id: int
+    round_id: int | None = None
+    validator_key: str
+    event_type: str
+    severity: str
+    event_phase: str
+    synthetic: bool = False
+    correlated: bool = False
+    created_at: str
+    current_values: dict
+    previous_values: dict | None = None
+
+
+class IncidentResponse(BaseModel):
+    id: int
+    validator_key: str
+    severity: str
+    status: str
+    synthetic: bool = False
+    correlated: bool = False
+    summary: str
+    start_time: str
+    end_time: str | None = None
+    duration_seconds: int | None = None
+    event_types: list[str]
+    active_event_types: list[str]
+    latest_round_id: int | None = None
+    latest_event_time: str
+    before_values: dict | None = None
+    during_values: dict | None = None
+    after_values: dict | None = None
+    events: list[IncidentEventResponse] | None = None
+
+
+class IncidentListResponse(BaseModel):
+    incidents: list[IncidentResponse]

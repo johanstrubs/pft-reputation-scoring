@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post Fiat Validator Incidents</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0b1220;
+            --panel: #121b2e;
+            --panel-2: #18243b;
+            --text: #e6edf7;
+            --muted: #9db0cc;
+            --line: #253553;
+            --accent: #61a8ff;
+            --good: #4bd38a;
+            --warn: #ffbf47;
+            --bad: #ff6b6b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top, #1a2742, var(--bg) 45%);
+            color: var(--text);
+        }
+        .container {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 32px 20px 56px;
+        }
+        .hero, .filters, .card, .healthy {
+            background: rgba(18, 27, 46, 0.92);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+        }
+        .hero {
+            padding: 28px;
+            margin-bottom: 20px;
+        }
+        h1, h2, h3, p { margin-top: 0; }
+        .hero-meta, .subtle, .metric-note {
+            color: var(--muted);
+        }
+        .hero-links a, .subtle a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .hero-links {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        .filters {
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 14px;
+            color: var(--muted);
+        }
+        input, select, button {
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: var(--panel-2);
+            color: var(--text);
+            padding: 12px;
+            font: inherit;
+        }
+        button {
+            cursor: pointer;
+            background: linear-gradient(135deg, #2f6dff, #4ba1ff);
+            border: none;
+            font-weight: 600;
+        }
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+        .ghost {
+            background: transparent;
+            border: 1px solid var(--line);
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            color: var(--muted);
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .card {
+            padding: 18px;
+            margin-bottom: 14px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: start;
+            flex-wrap: wrap;
+        }
+        .chip-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 10px 0 14px;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            border: 1px solid var(--line);
+            background: rgba(255,255,255,0.03);
+        }
+        .critical { color: var(--bad); border-color: rgba(255,107,107,0.35); }
+        .warning { color: var(--warn); border-color: rgba(255,191,71,0.35); }
+        .info { color: var(--good); border-color: rgba(75,211,138,0.35); }
+        .details {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--line);
+        }
+        .details.open { display: block; }
+        .context-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        pre {
+            margin: 0;
+            padding: 12px;
+            background: #0b1220;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            overflow: auto;
+            font-size: 12px;
+            color: #d8e4f7;
+        }
+        .event-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .event-item {
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 12px;
+            background: rgba(255,255,255,0.02);
+        }
+        .healthy {
+            padding: 28px;
+            text-align: center;
+        }
+        .loading {
+            color: var(--muted);
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <section class="hero">
+            <h1>Validator Incident Timeline</h1>
+            <p class="hero-meta">Persistent incident history for validator reliability, recovery, and context after each scoring round.</p>
+            <div class="hero-links">
+                <a href="/leaderboard">Leaderboard</a>
+                <a href="/api/incidents" id="json-feed-link">Live JSON Feed</a>
+                <a href="/api/incidents?status=open">Open Incidents</a>
+            </div>
+        </section>
+
+        <section class="filters">
+            <div class="filter-grid">
+                <label>Validator Key
+                    <input id="validator-key" placeholder="nH..." />
+                </label>
+                <label>Severity
+                    <select id="severity">
+                        <option value="">All</option>
+                        <option value="critical">Critical</option>
+                        <option value="warning">Warning</option>
+                        <option value="info">Info</option>
+                    </select>
+                </label>
+                <label>Event Type
+                    <select id="event-type">
+                        <option value="">All</option>
+                        <option value="agreement_drop_critical">Agreement Critical</option>
+                        <option value="agreement_drop_warning">Agreement Warning</option>
+                        <option value="validator_disappearance">Disappearance</option>
+                        <option value="validator_appearance">Appearance</option>
+                        <option value="peer_collapse">Peer Collapse</option>
+                        <option value="score_shock">Score Shock</option>
+                        <option value="version_change">Version Change</option>
+                        <option value="server_state_anomaly">Server State</option>
+                        <option value="synthetic_test">Synthetic Test</option>
+                    </select>
+                </label>
+                <label>Status
+                    <select id="status">
+                        <option value="">All</option>
+                        <option value="open">Open</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </label>
+                <label>From
+                    <input id="date-from" type="date" />
+                </label>
+                <label>To
+                    <input id="date-to" type="date" />
+                </label>
+            </div>
+            <div class="filter-actions">
+                <button id="apply-filters">Apply Filters</button>
+                <button id="reset-filters" class="ghost">Reset</button>
+            </div>
+        </section>
+
+        <div class="status-row">
+            <div id="result-summary">Loading incidents...</div>
+            <div id="last-checked">Last checked: -</div>
+        </div>
+
+        <div id="loading" class="loading">Loading incident feed...</div>
+        <div id="healthy-state" class="healthy" hidden>
+            <h2>Network healthy</h2>
+            <p class="metric-note">No incident records match the current filters. The detector is still watching each scoring round.</p>
+            <p class="subtle" id="healthy-timestamp"></p>
+        </div>
+        <div id="incident-list"></div>
+    </div>
+
+    <script>
+        const els = {
+            validatorKey: document.getElementById('validator-key'),
+            severity: document.getElementById('severity'),
+            eventType: document.getElementById('event-type'),
+            status: document.getElementById('status'),
+            dateFrom: document.getElementById('date-from'),
+            dateTo: document.getElementById('date-to'),
+            apply: document.getElementById('apply-filters'),
+            reset: document.getElementById('reset-filters'),
+            list: document.getElementById('incident-list'),
+            loading: document.getElementById('loading'),
+            healthy: document.getElementById('healthy-state'),
+            healthyTimestamp: document.getElementById('healthy-timestamp'),
+            resultSummary: document.getElementById('result-summary'),
+            lastChecked: document.getElementById('last-checked'),
+            jsonFeedLink: document.getElementById('json-feed-link'),
+        };
+
+        function getParams() {
+            const params = new URLSearchParams();
+            if (els.validatorKey.value.trim()) params.set('validator_key', els.validatorKey.value.trim());
+            if (els.severity.value) params.set('severity', els.severity.value);
+            if (els.eventType.value) params.set('event_type', els.eventType.value);
+            if (els.status.value) params.set('status', els.status.value);
+            if (els.dateFrom.value) params.set('date_from', new Date(`${els.dateFrom.value}T00:00:00Z`).toISOString());
+            if (els.dateTo.value) params.set('date_to', new Date(`${els.dateTo.value}T23:59:59Z`).toISOString());
+            return params;
+        }
+
+        function fmtDate(value) {
+            if (!value) return 'Ongoing';
+            return new Date(value).toLocaleString();
+        }
+
+        function fmtDuration(seconds) {
+            if (seconds == null) return 'Ongoing';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = seconds % 60;
+            return [h ? `${h}h` : null, m ? `${m}m` : null, `${s}s`].filter(Boolean).join(' ');
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;');
+        }
+
+        async function loadIncidents() {
+            els.loading.hidden = false;
+            els.healthy.hidden = true;
+            els.list.innerHTML = '';
+            const params = getParams();
+            const url = `/api/incidents${params.toString() ? `?${params.toString()}` : ''}`;
+            els.jsonFeedLink.href = url;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            const incidents = data.incidents || [];
+            els.lastChecked.textContent = `Last checked: ${new Date().toLocaleString()}`;
+            els.resultSummary.textContent = `${incidents.length} incident${incidents.length === 1 ? '' : 's'} loaded`;
+            els.loading.hidden = true;
+
+            if (!incidents.length) {
+                els.healthy.hidden = false;
+                els.healthyTimestamp.textContent = `Last checked ${new Date().toLocaleString()}`;
+                return;
+            }
+
+            incidents.forEach((incident) => {
+                const article = document.createElement('article');
+                article.className = 'card';
+                article.innerHTML = `
+                    <div class="card-header">
+                        <div>
+                            <h2>${escapeHtml(incident.summary)}</h2>
+                            <div class="subtle">${escapeHtml(incident.validator_key)} • ${fmtDate(incident.start_time)} to ${fmtDate(incident.end_time)}</div>
+                        </div>
+                        <div class="subtle">Duration: ${fmtDuration(incident.duration_seconds)}</div>
+                    </div>
+                    <div class="chip-row">
+                        <span class="chip ${incident.severity}">${escapeHtml(incident.severity)}</span>
+                        <span class="chip">${escapeHtml(incident.status)}</span>
+                        <span class="chip">${incident.synthetic ? 'synthetic' : 'detected'}</span>
+                        <span class="chip">${incident.correlated ? 'correlated round' : 'isolated'}</span>
+                        ${incident.event_types.map((type) => `<span class="chip">${escapeHtml(type)}</span>`).join('')}
+                    </div>
+                    <button class="ghost" data-open-incident="${incident.id}">Show details</button>
+                    <div class="details" id="incident-details-${incident.id}"></div>
+                `;
+                els.list.appendChild(article);
+            });
+
+            document.querySelectorAll('[data-open-incident]').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const incidentId = button.dataset.openIncident;
+                    const details = document.getElementById(`incident-details-${incidentId}`);
+                    const open = details.classList.contains('open');
+                    if (open) {
+                        details.classList.remove('open');
+                        button.textContent = 'Show details';
+                        return;
+                    }
+                    if (!details.dataset.loaded) {
+                        details.innerHTML = '<div class="loading">Loading incident detail...</div>';
+                        const resp = await fetch(`/api/incidents/${incidentId}`);
+                        const incident = await resp.json();
+                        details.innerHTML = `
+                            <div class="context-grid">
+                                <div><h3>Before</h3><pre>${escapeHtml(JSON.stringify(incident.before_values, null, 2))}</pre></div>
+                                <div><h3>During</h3><pre>${escapeHtml(JSON.stringify(incident.during_values, null, 2))}</pre></div>
+                                <div><h3>After</h3><pre>${escapeHtml(JSON.stringify(incident.after_values, null, 2))}</pre></div>
+                            </div>
+                            <div class="event-list">
+                                ${(incident.events || []).map((event) => `
+                                    <div class="event-item">
+                                        <strong>${escapeHtml(event.event_type)}</strong> • ${escapeHtml(event.event_phase)} • ${fmtDate(event.created_at)}
+                                        <div class="subtle">Severity: ${escapeHtml(event.severity)}</div>
+                                        <pre>${escapeHtml(JSON.stringify({ current: event.current_values, previous: event.previous_values }, null, 2))}</pre>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                        details.dataset.loaded = 'true';
+                    }
+                    details.classList.add('open');
+                    button.textContent = 'Hide details';
+                });
+            });
+        }
+
+        els.apply.addEventListener('click', loadIncidents);
+        els.reset.addEventListener('click', () => {
+            els.validatorKey.value = '';
+            els.severity.value = '';
+            els.eventType.value = '';
+            els.status.value = '';
+            els.dateFrom.value = '';
+            els.dateTo.value = '';
+            loadIncidents();
+        });
+
+        loadIncidents();
+    </script>
+</body>
+</html>
