@@ -14,6 +14,7 @@ from app.config import settings
 from app.collector import DataCollector
 from app.scorer import ReputationScorer
 from app.database import Database
+from app.diagnostics import build_diagnostic_report
 from app.digest import generate_and_store_weekly_digest
 from app.incidents import inject_synthetic_incident
 from app.scheduler import start_scheduler
@@ -26,6 +27,7 @@ from app.models import (
     WeeklyDigestHistoryResponse,
     IncidentResponse,
     IncidentListResponse,
+    DiagnosticReportResponse,
 )
 
 logging.basicConfig(
@@ -227,6 +229,20 @@ async def create_synthetic_incident(req: IncidentTestRequest):
     incident = await inject_synthetic_incident(db, req.validator_key)
     incident["events"] = await db.get_incident_events(incident["id"])
     return IncidentResponse(**incident)
+
+
+@app.get("/api/diagnose/{public_key}", response_model=DiagnosticReportResponse)
+async def diagnose_validator(public_key: str):
+    round_id, round_ts, scores = await db.get_latest_scores()
+    if round_id is None:
+        raise HTTPException(status_code=503, detail="No scoring data available yet")
+    try:
+        report = build_diagnostic_report(round_id, round_ts, scores, public_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found") from exc
+    return DiagnosticReportResponse(**report)
 
 
 # --- Alerts & Subscriptions ---
@@ -514,6 +530,11 @@ async def simulator():
 @app.get("/incidents")
 async def incidents_page():
     return FileResponse(os.path.join(STATIC_DIR, "incidents.html"))
+
+
+@app.get("/diagnose")
+async def diagnose_page():
+    return FileResponse(os.path.join(STATIC_DIR, "diagnose.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

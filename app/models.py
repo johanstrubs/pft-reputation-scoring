@@ -138,3 +138,37 @@ class IncidentResponse(BaseModel):
 
 class IncidentListResponse(BaseModel):
     incidents: list[IncidentResponse]
+
+
+class DiagnosticFindingResponse(BaseModel):
+    category: str
+    metric: str
+    severity: str
+    title: str
+    current_value: str
+    threshold_value: str
+    likely_cause: str
+    recommended_action: str
+
+
+class DiagnosticStrengthResponse(BaseModel):
+    metric: str
+    title: str
+    current_value: str
+    benchmark: str
+    why_it_matters: str
+
+
+class DiagnosticReportResponse(BaseModel):
+    public_key: str
+    domain: str | None = None
+    round_id: int
+    timestamp: str
+    composite_score: float
+    rank: int
+    validator_count: int
+    overall_status: str
+    status_summary: str
+    json_report_url: str
+    findings: list[DiagnosticFindingResponse]
+    strengths: list[DiagnosticStrengthResponse]

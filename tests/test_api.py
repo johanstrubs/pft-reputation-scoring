@@ -113,6 +113,15 @@ async def test_incidents_page():
 
 
 @pytest.mark.anyio
+async def test_diagnose_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/diagnose")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_network_topology_includes_version_and_strict_enrichment(mock_scores):
     partial = ValidatorScore(
         public_key="nHPartial",
@@ -278,3 +287,60 @@ async def test_incident_detail_and_synthetic_endpoint():
     assert detail_resp.json()["events"][0]["event_phase"] == "triggered"
     assert synthetic_resp.status_code == 200
     assert synthetic_resp.json()["synthetic"] is True
+
+
+@pytest.mark.anyio
+async def test_diagnose_endpoint(mock_scores):
+    transport = ASGITransport(app=app)
+    weak = ValidatorScore(
+        public_key="nHWeak",
+        domain="weak.example.com",
+        composite_score=61.2,
+        metrics=ValidatorMetrics(
+            agreement_1h=0.91,
+            agreement_24h=0.92,
+            agreement_30d=0.89,
+            uptime_seconds=3600,
+            uptime_pct=10.0,
+            latency_ms=420.0,
+            peer_count=2,
+            poll_success_pct=80.0,
+            server_version="1.0.0",
+            server_state="syncing",
+            asn=24940,
+            isp="Hetzner",
+            country="DE",
+        ),
+        sub_scores=ValidatorSubScores(
+            agreement_1h=0.55,
+            agreement_24h=0.60,
+            agreement_30d=0.45,
+            uptime=0.10,
+            poll_success=0.40,
+            latency=0.15,
+            peer_count=0.0,
+            version=1.0,
+            diversity=0.2,
+        ),
+        last_updated="2026-03-17T12:00:00+00:00",
+    )
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(5, "2026-03-17T12:00:00", mock_scores + [weak])):
+            resp = await client.get("/api/diagnose/nHWeak")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["public_key"] == "nHWeak"
+    assert data["overall_status"] in {"critical", "warning"}
+    assert data["findings"]
+    assert "json_report_url" in data
+
+
+@pytest.mark.anyio
+async def test_diagnose_endpoint_not_found():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(1, "2026-03-17T12:00:00", [])):
+            resp = await client.get("/api/diagnose/nHMissing")
+    assert resp.status_code == 404 or resp.status_code == 503

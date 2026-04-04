@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Diagnostic Recommendations</title>
+    <link rel="stylesheet" href="/static/diagnose.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/leaderboard">Leaderboard</a>
+            <a href="/simulator">Score Simulator</a>
+            <a href="/incidents">Incident Timeline</a>
+        </nav>
+
+        <section class="hero">
+            <h1>Validator Diagnostic Recommendations</h1>
+            <p>Load a live validator record and turn score data into plain-English fault findings, likely causes, and concrete next actions.</p>
+            <div class="hero-meta">
+                <span class="chip">Rule-based only</span>
+                <span class="chip">Live data from <code>/api/scores</code></span>
+                <span class="chip">JSON report available for the same validator</span>
+            </div>
+        </section>
+
+        <section class="lookup-card">
+            <label class="lookup-label" for="validator-key">Validator Public Key</label>
+            <div class="lookup-row">
+                <input id="validator-key" type="text" placeholder="Paste an nH... validator public key">
+                <button id="load-button" class="primary-button">Run Diagnostics</button>
+            </div>
+            <div class="button-row">
+                <button id="share-button" class="secondary-button" type="button">Copy Share Link</button>
+                <a id="json-link" class="secondary-link" href="/api/diagnose/" target="_blank" rel="noreferrer">Open JSON Report</a>
+            </div>
+            <div class="helper-text">Tip: add <code>?validator=&lt;pubkey&gt;</code> to share a prefilled diagnostic URL.</div>
+            <div class="error-banner" id="error-banner"></div>
+        </section>
+
+        <section class="loading-card" id="loading-card">
+            <div class="spinner"></div>
+            Loading live diagnostic report...
+        </section>
+
+        <section class="app" id="diagnose-app">
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="eyebrow">Overall Status</div>
+                    <div class="headline" id="overall-status">-</div>
+                    <div class="subline" id="status-summary">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Composite Score</div>
+                    <div class="headline" id="composite-score">-</div>
+                    <div class="subline" id="validator-rank">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Validator</div>
+                    <div class="headline" id="validator-name">-</div>
+                    <div class="subline" id="validator-key-text">-</div>
+                </div>
+            </div>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Prioritized Findings</h2>
+                    <div class="panel-note" id="finding-count">-</div>
+                </div>
+                <div id="clean-bill" class="clean-bill"></div>
+                <div id="findings-list" class="finding-list"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>What's Working Well</h2>
+                    <div class="panel-note">Above-median strengths from the current live cohort</div>
+                </div>
+                <div id="strengths-list" class="strength-list"></div>
+            </section>
+        </section>
+
+        <footer>
+            Data from <a href="/api/scores">/api/scores</a> |
+            <a href="/api/methodology">/api/methodology</a> |
+            <a href="/simulator">Score Simulator</a> |
+            <a href="/leaderboard">Leaderboard</a>
+        </footer>
+    </div>
+
+    <script src="/static/diagnose.js"></script>
+</body>
+</html>
