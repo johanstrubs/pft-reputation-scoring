@@ -14,12 +14,15 @@ from app.config import settings
 from app.collector import DataCollector
 from app.scorer import ReputationScorer
 from app.database import Database
+from app.digest import generate_and_store_weekly_digest
 from app.scheduler import start_scheduler
 from app.models import (
     ScoresResponse,
     HealthResponse,
     HistoryResponse,
     MethodologyResponse,
+    WeeklyDigestResponse,
+    WeeklyDigestHistoryResponse,
 )
 
 logging.basicConfig(
@@ -156,8 +159,30 @@ async def get_methodology():
     )
 
 
-# --- Alerts & Subscriptions ---
+@app.get("/api/digest/latest", response_model=WeeklyDigestResponse)
+async def get_latest_digest():
+    digest = await db.get_latest_digest()
+    if not digest:
+        raise HTTPException(status_code=503, detail="No weekly digest available yet")
+    return WeeklyDigestResponse(**digest)
 
+
+@app.get("/api/digest/history", response_model=WeeklyDigestHistoryResponse)
+async def get_digest_history(limit: int = 10):
+    digests = await db.get_digest_history(limit=min(limit, 52))
+    return WeeklyDigestHistoryResponse(digests=[WeeklyDigestResponse(**digest) for digest in digests])
+
+
+@app.post("/api/digest/trigger", response_model=WeeklyDigestResponse)
+async def trigger_weekly_digest():
+    try:
+        digest = await generate_and_store_weekly_digest(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return WeeklyDigestResponse(**digest)
+
+
+# --- Alerts & Subscriptions ---
 
 class SubscribeRequest(BaseModel):
     public_key: str

@@ -83,3 +83,18 @@ class MethodologyResponse(BaseModel):
     description: str
     weights: dict[str, float]
     thresholds: dict[str, dict]
+
+
+class WeeklyDigestResponse(BaseModel):
+    id: int
+    created_at: str
+    latest_round_id: int
+    comparison_round_id: int
+    delivery_status: str
+    posted_at: str | None = None
+    message_id: str | None = None
+    payload: dict
+
+
+class WeeklyDigestHistoryResponse(BaseModel):
+    digests: list[WeeklyDigestResponse]

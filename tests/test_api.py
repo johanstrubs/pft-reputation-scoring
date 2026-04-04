@@ -135,3 +135,54 @@ async def test_network_topology_includes_version_and_strict_enrichment(mock_scor
     partial_row = next(v for v in data["validators"] if v["public_key"] == "nHPartial")
     assert partial_row["server_version"] == "1.0.0"
     assert partial_row["enriched"] is False
+
+
+@pytest.mark.anyio
+async def test_latest_digest_endpoint():
+    transport = ASGITransport(app=app)
+    digest = {
+        "id": 1,
+        "created_at": "2026-04-04T12:00:00+00:00",
+        "latest_round_id": 100,
+        "comparison_round_id": 88,
+        "delivery_status": "posted",
+        "posted_at": "2026-04-04T12:01:00+00:00",
+        "message_id": "msg-1",
+        "payload": {
+            "summary": {"joins_count": 1},
+            "joins": [{"public_key": "nHJoin"}],
+            "departures": [{"public_key": "nHDepart"}],
+            "top_rank_gainers": [{"public_key": "nHGainer"}],
+            "top_rank_losers": [{"public_key": "nHLoser"}],
+            "score_change_alerts": [{"public_key": "nHAlert"}],
+            "concentration": {"coverage": {"current": {"enriched": 5}, "comparison": {"enriched": 4}}},
+        },
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_digest", new_callable=AsyncMock, return_value=digest):
+            resp = await client.get("/api/digest/latest")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["delivery_status"] == "posted"
+    assert data["payload"]["joins"][0]["public_key"] == "nHJoin"
+
+
+@pytest.mark.anyio
+async def test_trigger_digest_endpoint():
+    transport = ASGITransport(app=app)
+    digest = {
+        "id": 2,
+        "created_at": "2026-04-04T12:00:00+00:00",
+        "latest_round_id": 100,
+        "comparison_round_id": 88,
+        "delivery_status": "posted",
+        "posted_at": "2026-04-04T12:01:00+00:00",
+        "message_id": "msg-2",
+        "payload": {"summary": {"joins_count": 1}},
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.generate_and_store_weekly_digest", new_callable=AsyncMock, return_value=digest):
+            resp = await client.post("/api/digest/trigger")
+    assert resp.status_code == 200
+    assert resp.json()["message_id"] == "msg-2"

@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Seed peers for crawl discovery (comma-separated IPs)
     # If empty, seeds are derived from VHS topology nodes
     crawl_seed_peers: str = ""
+    weekly_digest_webhook_url: str = ""
+    weekly_digest_day_utc: int = 0
+    weekly_digest_hour_utc: int = 14
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

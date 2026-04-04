@@ -6,6 +6,7 @@ from app.collector import DataCollector
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.config import settings
+from app.digest import generate_and_store_weekly_digest
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +76,34 @@ async def daily_report_loop(db: Database):
         await asyncio.sleep(60)  # Check every minute
 
 
+async def weekly_digest_loop(db: Database):
+    """Send weekly public digest at the configured UTC day/hour."""
+    last_sent_key = None
+    while True:
+        now = datetime.now(timezone.utc)
+        week_key = f"{now.isocalendar().year}-W{now.isocalendar().week}"
+        should_fire = (
+            now.weekday() == settings.weekly_digest_day_utc
+            and now.hour == settings.weekly_digest_hour_utc
+            and settings.weekly_digest_webhook_url
+        )
+        if should_fire and week_key != last_sent_key:
+            try:
+                logger.info("Triggering weekly network digest...")
+                await generate_and_store_weekly_digest(db, webhook_url=settings.weekly_digest_webhook_url)
+                last_sent_key = week_key
+            except Exception:
+                logger.exception("Weekly digest generation failed")
+        await asyncio.sleep(60)
+
+
 async def start_scheduler(collector: DataCollector, scorer: ReputationScorer, db: Database):
     # Run one immediate round on startup
     await run_scoring_round(collector, scorer, db)
 
     # Start daily report loop in background
     asyncio.create_task(daily_report_loop(db))
+    asyncio.create_task(weekly_digest_loop(db))
 
     # Then run scoring on interval
     while True:

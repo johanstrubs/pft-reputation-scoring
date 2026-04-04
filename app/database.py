@@ -1,4 +1,5 @@
 import aiosqlite
+import json
 import os
 from datetime import datetime, timezone
 
@@ -82,6 +83,22 @@ CREATE TABLE IF NOT EXISTS alert_cooldowns (
     fired_at TEXT NOT NULL,
     UNIQUE(public_key, alert_type)
 );
+
+CREATE TABLE IF NOT EXISTS weekly_digests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    latest_round_id INTEGER NOT NULL,
+    comparison_round_id INTEGER NOT NULL,
+    delivery_status TEXT NOT NULL,
+    posted_at TEXT,
+    message_id TEXT,
+    webhook_url TEXT,
+    payload_json TEXT NOT NULL,
+    FOREIGN KEY (latest_round_id) REFERENCES scoring_rounds(id),
+    FOREIGN KEY (comparison_round_id) REFERENCES scoring_rounds(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_weekly_digests_created_at ON weekly_digests(created_at DESC);
 """
 
 
@@ -529,3 +546,152 @@ class Database:
             )
             row = await cursor.fetchone()
             return row[0] if row else None
+
+    async def get_latest_round_summary(self) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT id, timestamp, validator_count, avg_score, min_score, max_score FROM scoring_rounds ORDER BY id DESC LIMIT 1"
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def get_round_summary(self, round_id: int) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT id, timestamp, validator_count, avg_score, min_score, max_score FROM scoring_rounds WHERE id = ?",
+                (round_id,),
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def get_comparison_round_summary(self, latest_timestamp: str, min_days: int = 6, max_days: int = 8) -> dict | None:
+        latest_dt = datetime.fromisoformat(latest_timestamp)
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT id, timestamp, validator_count, avg_score, min_score, max_score FROM scoring_rounds ORDER BY timestamp DESC"
+            )
+            rows = await cursor.fetchall()
+
+        best_row = None
+        best_gap = None
+        for row in rows:
+            row_dt = datetime.fromisoformat(row["timestamp"])
+            delta_days = (latest_dt - row_dt).total_seconds() / 86400
+            if min_days <= delta_days <= max_days:
+                gap = abs(delta_days - 7.0)
+                if best_gap is None or gap < best_gap:
+                    best_gap = gap
+                    best_row = row
+        return dict(best_row) if best_row else None
+
+    async def get_scores_for_round(self, round_id: int) -> list[ValidatorScore]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM validator_scores WHERE round_id = ? ORDER BY composite_score DESC",
+                (round_id,),
+            )
+            rows = await cursor.fetchall()
+
+        scores = []
+        for r in rows:
+            from app.models import ValidatorMetrics, ValidatorSubScores
+            scores.append(ValidatorScore(
+                public_key=r["public_key"],
+                domain=r["domain"],
+                composite_score=r["composite_score"],
+                metrics=ValidatorMetrics(
+                    agreement_1h=r["agreement_1h"],
+                    agreement_24h=r["agreement_24h"],
+                    agreement_30d=r["agreement_30d"],
+                    uptime_seconds=r["uptime_seconds"],
+                    uptime_pct=r["uptime_pct"],
+                    latency_ms=r["latency_ms"],
+                    peer_count=r["peer_count"],
+                    avg_ledger_interval=r["avg_ledger_interval"],
+                    poll_success_pct=r["poll_success_pct"],
+                    server_version=r["server_version"],
+                    server_state=r["server_state"],
+                    asn=r["asn"],
+                    isp=r["isp"],
+                    country=r["country"],
+                ),
+                sub_scores=ValidatorSubScores(
+                    agreement_1h=r["agreement_1h_score"] or 0.0,
+                    agreement_24h=r["agreement_24h_score"] or 0.0,
+                    agreement_30d=r["agreement_30d_score"] or 0.0,
+                    uptime=r["uptime_score"] or 0.0,
+                    poll_success=r["poll_success_score"] or 0.0,
+                    latency=r["latency_score"] or 0.0,
+                    peer_count=r["peer_count_score"] or 0.0,
+                    version=r["version_score"] or 0.0,
+                    diversity=r["diversity_score"] or 0.0,
+                ),
+                last_updated=r["timestamp"],
+            ))
+        return scores
+
+    async def store_weekly_digest(
+        self,
+        payload: dict,
+        latest_round_id: int,
+        comparison_round_id: int,
+        delivery_status: str,
+        posted_at: str | None = None,
+        message_id: str | None = None,
+        webhook_url: str | None = None,
+    ) -> int:
+        created_at = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """INSERT INTO weekly_digests
+                   (created_at, latest_round_id, comparison_round_id, delivery_status, posted_at, message_id, webhook_url, payload_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    created_at,
+                    latest_round_id,
+                    comparison_round_id,
+                    delivery_status,
+                    posted_at,
+                    message_id,
+                    webhook_url,
+                    json.dumps(payload),
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_latest_digest(self) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM weekly_digests ORDER BY id DESC LIMIT 1"
+            )
+            row = await cursor.fetchone()
+        return self._row_to_digest(row) if row else None
+
+    async def get_digest_history(self, limit: int = 10) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM weekly_digests ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_digest(row) for row in rows]
+
+    @staticmethod
+    def _row_to_digest(row) -> dict:
+        return {
+            "id": row["id"],
+            "created_at": row["created_at"],
+            "latest_round_id": row["latest_round_id"],
+            "comparison_round_id": row["comparison_round_id"],
+            "delivery_status": row["delivery_status"],
+            "posted_at": row["posted_at"],
+            "message_id": row["message_id"],
+            "payload": json.loads(row["payload_json"]),
+        }
