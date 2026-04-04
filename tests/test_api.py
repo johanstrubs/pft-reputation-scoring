@@ -95,6 +95,15 @@ async def test_methodology():
 
 
 @pytest.mark.anyio
+async def test_simulator_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/simulator")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_network_topology_includes_version_and_strict_enrichment(mock_scores):
     partial = ValidatorScore(
         public_key="nHPartial",

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Score Simulator</title>
+    <link rel="stylesheet" href="/static/simulator.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/leaderboard">Leaderboard</a>
+            <a href="/network">Network Map</a>
+            <a href="/alerts">Alerts & Subscriptions</a>
+        </nav>
+
+        <section class="hero">
+            <h1>Validator Score Simulator</h1>
+            <p>Load your live validator baseline, test improvements to the metrics you can actually influence, and see how those changes would affect your composite score and rank right now.</p>
+            <div class="hero-meta">
+                <span class="chip">Live data from <code>/api/scores</code></span>
+                <span class="chip">Browser-side scorer matching current backend behavior</span>
+                <span class="chip">No authentication required</span>
+            </div>
+        </section>
+
+        <section class="lookup-card">
+            <label class="lookup-label" for="validator-key">Validator Public Key</label>
+            <div class="lookup-row">
+                <input id="validator-key" type="text" placeholder="Paste an nH... validator public key">
+                <button id="load-button" class="primary-button">Load Baseline</button>
+            </div>
+            <div class="button-row">
+                <button id="reset-button" class="secondary-button" type="button">Reset To Baseline</button>
+                <button id="share-button" class="secondary-button" type="button">Copy Share Link</button>
+            </div>
+            <div class="helper-text" id="helper-text">Tip: add <code>?validator=&lt;pubkey&gt;</code> to share a prefilled simulator link.</div>
+            <div class="error-banner" id="error-banner"></div>
+        </section>
+
+        <section class="lookup-card loading-card" id="loading-card">
+            <div class="spinner"></div>
+            Loading live validator data and methodology...
+        </section>
+
+        <section class="app" id="simulator-app">
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="eyebrow">Baseline Score</div>
+                    <div class="headline" id="baseline-score">-</div>
+                    <div class="subline" id="baseline-rank">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Projected Score</div>
+                    <div class="headline" id="projected-score">-</div>
+                    <div class="subline" id="score-delta">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Projected Rank</div>
+                    <div class="headline" id="projected-rank">-</div>
+                    <div class="subline" id="rank-delta">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Validator</div>
+                    <div class="headline" id="validator-name">-</div>
+                    <div class="subline" id="validator-meta">-</div>
+                </div>
+            </div>
+
+            <div class="main-grid">
+                <section class="panel">
+                    <h2>Adjustable Metrics</h2>
+                    <p class="panel-intro">These controls update your simulated score instantly. Non-adjusted metrics such as poll success, version, and diversity remain fixed at their current live values.</p>
+                    <div class="metric-stack" id="metric-controls"></div>
+                </section>
+
+                <section class="panel">
+                    <h2>Simulation Summary</h2>
+                    <div class="assumption-list" id="assumptions"></div>
+
+                    <div class="nearby-title">Nearby Validators</div>
+                    <div class="nearby-list" id="nearby-list"></div>
+                </section>
+            </div>
+
+            <section class="compare-card" style="margin-top:18px;">
+                <h2>Highest-Leverage Opportunity</h2>
+                <div class="big-opportunity" id="best-opportunity"></div>
+                <div class="opportunity-list" id="opportunity-list"></div>
+            </section>
+
+            <section class="compare-card" style="margin-top:18px;">
+                <h2>Compare All Metrics</h2>
+                <p class="panel-intro">This compares your current raw metric values to the strongest live validator on each adjustable dimension, so you can see where your biggest operating gaps remain.</p>
+                <div class="compare-grid" id="compare-grid"></div>
+            </section>
+        </section>
+
+        <footer>
+            Data from <a href="/api/scores">/api/scores</a> and <a href="/api/methodology">/api/methodology</a> |
+            <a href="/leaderboard">Leaderboard</a> |
+            <a href="/network">Network Diversity Map</a>
+        </footer>
+    </div>
+
+    <script src="/static/simulator.js"></script>
+</body>
+</html>

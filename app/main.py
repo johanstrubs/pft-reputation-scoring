@@ -434,4 +434,9 @@ async def leaderboard():
     return FileResponse(os.path.join(STATIC_DIR, "leaderboard.html"))
 
 
+@app.get("/simulator")
+async def simulator():
+    return FileResponse(os.path.join(STATIC_DIR, "simulator.html"))
+
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
