@@ -17,6 +17,8 @@ PROBE_TIMEOUT = 5.0
 PROBE_PORTS = [51234, 5005, 5006]
 # How often to re-probe topology nodes for key mapping (seconds)
 MAPPING_CACHE_TTL = 3600  # 1 hour
+CRAWL_TIMEOUT = 8.0
+CRAWL_CONCURRENCY = 15
 
 
 class NodeValidatorMap:
@@ -114,6 +116,14 @@ class DataCollector:
             topology_nodes = vhs_topology
         else:
             logger.error("Failed to fetch VHS topology: %s", vhs_topology)
+
+        # Correlation Step 0 (primary): Crawl network peers for pubkey_validator
+        if self._node_map.needs_probe():
+            seed_ips = settings.crawl_seed_list
+            if not seed_ips and topology_nodes:
+                seed_ips = [n["ip"] for n in topology_nodes if n.get("ip")]
+            if seed_ips:
+                await self._crawl_network(seed_ips, snapshots)
 
         # Correlation Step 1: Use RPC results to map pubkey_node -> pubkey_validator -> master_key
         if isinstance(rpc_results, list):
@@ -378,6 +388,71 @@ class DataCollector:
 
         if discovered:
             logger.info("DNS resolution discovered %d new node->validator mappings", discovered)
+
+    async def _crawl_network(
+        self,
+        seed_ips: list[str],
+        snapshots: dict[str, ValidatorSnapshot],
+    ):
+        """Crawl /crawl endpoints to discover node_key -> validator_key mappings.
+
+        Each node's /crawl response includes its own pubkey_node and pubkey_validator
+        in the server section (postfiatd v1.0.0+). Peer entries provide IPs for
+        recursive discovery.
+        """
+        port = settings.crawl_peer_port
+        visited: set[str] = set()
+        to_crawl: set[str] = set(seed_ips)
+        discovered = 0
+
+        # Three passes: seeds, then discovered peers for broader coverage
+        for pass_num in range(3):
+            batch = [ip for ip in to_crawl if ip not in visited]
+            if not batch:
+                break
+
+            logger.info("Crawl pass %d: querying %d peers on port %d", pass_num + 1, len(batch), port)
+
+            sem = asyncio.Semaphore(CRAWL_CONCURRENCY)
+
+            async def crawl_one(ip: str) -> dict | None:
+                async with sem:
+                    try:
+                        async with httpx.AsyncClient(timeout=CRAWL_TIMEOUT, verify=False) as client:
+                            resp = await client.get(f"https://{ip}:{port}/crawl")
+                            resp.raise_for_status()
+                        return resp.json()
+                    except Exception:
+                        return None
+
+            results = await asyncio.gather(
+                *(crawl_one(ip) for ip in batch),
+                return_exceptions=True,
+            )
+
+            for ip, result in zip(batch, results):
+                visited.add(ip)
+                if not isinstance(result, dict):
+                    continue
+
+                # Extract this node's own mapping from server section
+                server = result.get("server", {})
+                node_key = server.get("pubkey_node")
+                val_key = server.get("pubkey_validator")
+                if node_key and val_key and val_key != "none":
+                    # pubkey_validator from /crawl is the master key directly (nH...)
+                    if val_key in snapshots and not self._node_map.get_master_key(node_key):
+                        self._node_map.add(node_key, val_key, source="crawl")
+                        discovered += 1
+                        logger.debug("Crawl mapped %s -> %s from %s", node_key[:12], val_key[:12], ip)
+
+                # Collect peer IPs for next pass
+                for peer in result.get("overlay", {}).get("active", []):
+                    peer_ip = peer.get("ip")
+                    if peer_ip and peer_ip not in visited:
+                        to_crawl.add(peer_ip)
+
+        logger.info("Crawl discovery complete: %d new mappings from %d nodes queried", discovered, len(visited))
 
     @staticmethod
     def _compute_ledger_interval(complete_ledgers: str | None, uptime: int | None) -> float | None:

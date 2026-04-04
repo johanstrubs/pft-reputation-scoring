@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     # Manual node-to-validator key mappings (comma-separated node_key:master_key pairs)
     # Example: "n9NodeKey1:nHMasterKey1,n9NodeKey2:nHMasterKey2"
     manual_key_mappings: str = ""
+    # Peer port for /crawl endpoint (postfiatd peer protocol)
+    crawl_peer_port: int = 2559
+    # Seed peers for crawl discovery (comma-separated IPs)
+    # If empty, seeds are derived from VHS topology nodes
+    crawl_seed_peers: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
@@ -22,6 +27,12 @@ class Settings(BaseSettings):
         if not self.extra_node_rpcs:
             return []
         return [url.strip() for url in self.extra_node_rpcs.split(",") if url.strip()]
+
+    @property
+    def crawl_seed_list(self) -> list[str]:
+        if not self.crawl_seed_peers:
+            return []
+        return [ip.strip() for ip in self.crawl_seed_peers.split(",") if ip.strip()]
 
     @property
     def key_mapping_pairs(self) -> dict[str, str]:

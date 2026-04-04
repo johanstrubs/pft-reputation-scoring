@@ -34,7 +34,7 @@ The VHS stores validators (keyed by master/signing key) and topology nodes (keye
 - **RPC probing**: In standard XRPL, `server_info` returns both `pubkey_node` and `pubkey_validator`, which bridges the gap. However, the Post Fiat fork **strips `pubkey_validator` from all non-admin RPC responses**. The field only appears when querying from inside the validator's own Docker container on localhost. Every external RPC query (even to nodes that respond on port 5005) returns `pubkey_validator: missing`.
 - **Manifest lookups**: The `manifest` RPC maps master_key ↔ signing_key, but NOT to node_key. These are separate key hierarchies.
 - **VHS API exploration**: Checked `/v1/network/topology/validators`, `/v1/network/topology/nodes`, `/v1/network/manifests`, `/v1/network/validator_report` — none provide the node-to-validator mapping.
-- **Crawl endpoint**: Not available in this fork (`/crawl` returns empty or 404).
+- **Crawl endpoint**: Previously unavailable (`/crawl` returned empty or 404). **Now available as of postfiatd v1.0.0** — see Section "Crawl Endpoint Resolution" below.
 - **Peers RPC**: Returns `public_key` (node key type) and IP address, but requires admin access. Our Docker deployment uses port mapping which strips admin fields.
 
 **What works:**
@@ -85,3 +85,44 @@ print('Validator key:', info.get('pubkey_validator'))
 ```
 
 With these mappings, every validator could be fully enriched with topology data.
+
+---
+
+## Crawl Endpoint Resolution (postfiatd v1.0.0)
+
+**Date:** 2026-03-27 (v1.0.0 announced by Post Fiat core team)
+
+The biggest hurdle above — the node-to-validator key correlation problem — now has a programmatic solution. The `postfiatd v1.0.0` release added `pubkey_validator` to the `/crawl` endpoint response, specifically to enable the Dynamic UNL scoring pipeline.
+
+### Key Facts
+
+- **Endpoint**: `https://<node-ip>:2559/crawl` (peer port, HTTPS with self-signed cert)
+- **Auth**: None required — publicly accessible, no admin credentials needed
+- **Response structure**:
+  - `server.pubkey_node`: The node's own node key (`n9...`)
+  - `server.pubkey_validator`: The node's own validator/master key (`nH...`) — **this is the new field**
+  - `server.server_domain`: The node's configured domain
+  - `overlay.active[]`: List of connected peers with IP, port, base64 public key, version, uptime
+- **Confirmed working**: Tested against our own validator (`87.99.136.128:2559/crawl`) — returns both `pubkey_node` and `pubkey_validator` in the `server` section
+
+### How It Enables Full Enrichment
+
+Each node you crawl gives you its own `pubkey_node` → `pubkey_validator` mapping plus the IPs of all its peers. By recursively crawling peers starting from known seed nodes, you can build a complete mapping table for every v1.0.0 node on the network.
+
+From a 3-hop recursive crawl starting at our node, 40 nodes are reachable, yielding 20 validator mappings (all confirmed as direct master_key matches in VHS). The remaining unreachable nodes are either on older `postfiatd-3.0.0` (which does not expose `pubkey_validator`) or have port 2559 firewalled.
+
+### Dynamic UNL Context
+
+The Post Fiat team is building toward **Dynamic UNL** in three phases:
+1. **Phase 1 (in progress):** Foundation builds an automated scoring pipeline using an open-weight LLM to score validators and generate a signed validator list. Validators don't need to do anything different.
+2. **Phase 2 (later):** Validators run a GPU sidecar to independently reproduce scoring and publish results on-chain via commit-reveal.
+3. **Phase 3 (later):** Foundation steps back; converged validator results become the authoritative UNL.
+
+The v1.0.0 `/crawl` change is a prerequisite for Phase 1 — without it, the scoring pipeline can't resolve which nodes are validators or map them to IPs for geographic diversity scoring. Validators not on v1.0.0 show as `"ip: null"` in the scoring data.
+
+### Recommended Enrichment Priority Order
+
+1. **Crawl endpoint** (primary) — automatic, no operator action needed for v1.0.0 nodes
+2. **Subscriber-provided node keys** (verified) — for operators who submitted and verified via `/alerts`
+3. **DNS resolution** — for validators with unique domains resolving to their server IP
+4. **Manual key mappings** — for known out-of-band correlations

@@ -85,5 +85,16 @@ composite_score = (
 ## Data Collection
 
 - **Polling interval**: Every 5 minutes (configurable)
-- **Sources**: VHS API, direct validator RPC endpoints, Team Cymru / ipinfo.io ASN lookups
+- **Sources**: VHS API, `/crawl` peer endpoint, direct validator RPC endpoints, Team Cymru / ipinfo.io ASN lookups
 - **Storage**: SQLite database with historical scoring rounds
+
+### Node-to-Validator Key Correlation
+
+Topology metrics (uptime, latency, peer count, geographic diversity) require mapping network node keys (`n9...`) to validator master keys (`nH...`). The enrichment pipeline resolves these mappings using the following priority order:
+
+1. **Crawl endpoint** (primary): Queries `https://<ip>:2559/crawl` on known peers. Nodes running postfiatd v1.0.0+ expose `pubkey_validator` in the response `server` section, providing a direct node-to-validator mapping. Peers discovered during crawling are recursively queried for broader coverage.
+2. **Subscriber-provided node keys**: Validator operators can submit and verify their node key via the alerts subscription system.
+3. **DNS resolution**: Validator domains are resolved to IPs and matched against topology node IPs for unambiguous 1-to-1 matches.
+4. **Manual key mappings**: Configured via environment variable for known out-of-band correlations.
+
+Validators without a resolved mapping receive neutral scores (0.5) for topology-dependent metrics rather than penalties.
