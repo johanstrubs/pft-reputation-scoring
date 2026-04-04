@@ -133,7 +133,7 @@ class DataCollector:
                 if node_key and val_key and val_key != "none":
                     # val_key is a signing key — look up master key
                     master = signing_to_master.get(val_key) or (val_key if val_key in snapshots else None)
-                    if master:
+                    if master and not self._node_map.get_master_key(node_key):
                         self._node_map.add(node_key, master, val_key, source="rpc_config")
                         logger.debug("Mapped %s -> %s via configured RPC", node_key[:12], master[:12])
 

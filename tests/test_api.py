@@ -77,6 +77,8 @@ async def test_scores_with_data(mock_scores):
     assert resp.status_code == 200
     data = resp.json()
     assert data["validator_count"] == 1
+    assert data["enrichment_coverage"]["enriched"] == 1
+    assert data["enrichment_coverage"]["coverage_pct"] == 100.0
     assert data["validators"][0]["public_key"] == "nHTest1"
     assert data["validators"][0]["composite_score"] == 85.5
 
@@ -90,3 +92,37 @@ async def test_methodology():
     data = resp.json()
     assert "weights" in data
     assert abs(sum(data["weights"].values()) - 1.0) < 0.001
+
+
+@pytest.mark.anyio
+async def test_network_topology_includes_version_and_strict_enrichment(mock_scores):
+    partial = ValidatorScore(
+        public_key="nHPartial",
+        domain="partial.example.com",
+        composite_score=60.0,
+        metrics=ValidatorMetrics(
+            latency_ms=55.0,
+            uptime_seconds=7200,
+            peer_count=8,
+            server_version="1.0.0",
+            country="US",
+            asn=None,
+        ),
+        sub_scores=ValidatorSubScores(),
+        last_updated="2026-03-17T12:00:00+00:00",
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(1, "2026-03-17T12:00:00", mock_scores + [partial])):
+            resp = await client.get("/api/network/topology")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["enrichment_coverage"]["enriched"] == 1
+    assert data["enrichment_coverage"]["unenriched"] == 1
+    assert data["enrichment_coverage"]["coverage_pct"] == 50.0
+    assert data["validators"][0]["server_version"] is not None
+    partial_row = next(v for v in data["validators"] if v["public_key"] == "nHPartial")
+    assert partial_row["server_version"] == "1.0.0"
+    assert partial_row["enriched"] is False
