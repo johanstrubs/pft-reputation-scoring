@@ -30,12 +30,12 @@ const adjustableMetrics = [
     },
     {
         key: "uptime_pct",
-        label: "Uptime",
+        label: "Relative Uptime",
         inputType: "percent",
         min: 0,
         max: 100,
         step: 0.1,
-        note: "Simulated as a percentage of the current cohort max uptime.",
+        note: "This is scorer-normalized uptime: a percentage of the current cohort max uptime, not literal service availability.",
     },
     {
         key: "latency_ms",
@@ -387,7 +387,7 @@ function renderAssumptions(projected) {
         </div>
         <div class="assumption-item">
             <strong>Scorer baseline</strong>
-            <div class="muted">Cohort max uptime: ${fmtNumber(state.cohort.maxUptime / 86400, 1)} days. Latest version: ${state.cohort.latestVersion || "unknown"}.</div>
+            <div class="muted">Cohort max uptime: ${fmtNumber(state.cohort.maxUptime / 86400, 1)} days. Relative uptime is scored against that max, not against 100% wall-clock availability. Latest version: ${state.cohort.latestVersion || "unknown"}.</div>
         </div>
         <div class="assumption-item">
             <strong>Projected sub-scores</strong>
