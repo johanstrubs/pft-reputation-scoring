@@ -18,7 +18,7 @@
             <h1>Validator Diagnostic Recommendations</h1>
             <p>Load a live validator record and turn score data into plain-English fault findings, likely causes, and concrete next actions.</p>
             <div class="hero-meta">
-                <span class="chip">Rule-based only</span>
+                <span class="chip">Rule-based first, AI optional</span>
                 <span class="chip">Live data from <code>/api/scores</code></span>
                 <span class="chip">JSON report available for the same validator</span>
             </div>
@@ -77,6 +77,26 @@
                     <div class="panel-note">Above-median strengths from the current live cohort</div>
                 </div>
                 <div id="strengths-list" class="strength-list"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>AI Analysis</h2>
+                    <div class="panel-note">Advisory only, generated on demand</div>
+                </div>
+                <div class="ai-controls">
+                    <button id="ai-button" class="primary-button" type="button">Generate AI Analysis</button>
+                    <div class="helper-text">This is optional and advisory. Rule-based findings remain the primary diagnostic output.</div>
+                </div>
+                <div id="ai-loading" class="ai-loading">
+                    <div class="spinner"></div>
+                    Generating advisory AI analysis...
+                </div>
+                <div id="ai-error" class="error-banner"></div>
+                <div id="ai-card" class="ai-card">
+                    <div class="ai-meta" id="ai-meta"></div>
+                    <div id="ai-summary" class="ai-summary"></div>
+                </div>
             </section>
         </section>
 

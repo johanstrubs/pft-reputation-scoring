@@ -344,3 +344,34 @@ async def test_diagnose_endpoint_not_found():
         with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(1, "2026-03-17T12:00:00", [])):
             resp = await client.get("/api/diagnose/nHMissing")
     assert resp.status_code == 404 or resp.status_code == 503
+
+
+@pytest.mark.anyio
+async def test_diagnose_ai_endpoint_success():
+    transport = ASGITransport(app=app)
+    payload = {
+        "ai_summary": "Validator is underperforming due to recent uptime loss.",
+        "model": "claude-test",
+        "generated_at": "2026-04-04T12:00:00+00:00",
+        "cached": False,
+        "message": None,
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.generate_ai_diagnostic", new_callable=AsyncMock, return_value=payload):
+            resp = await client.post("/api/diagnose/nHWeak/ai")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ai_summary"]
+    assert data["model"] == "claude-test"
+
+
+@pytest.mark.anyio
+async def test_diagnose_ai_endpoint_limit_response():
+    from app.diagnostic_ai import AIDiagnosticLimitError
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.generate_ai_diagnostic", new_callable=AsyncMock, side_effect=AIDiagnosticLimitError("Temporarily unavailable")):
+            resp = await client.post("/api/diagnose/nHWeak/ai")
+    assert resp.status_code == 429
+    assert "Temporarily unavailable" in resp.json()["detail"]

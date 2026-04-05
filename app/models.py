@@ -172,3 +172,11 @@ class DiagnosticReportResponse(BaseModel):
     json_report_url: str
     findings: list[DiagnosticFindingResponse]
     strengths: list[DiagnosticStrengthResponse]
+
+
+class AIDiagnosticResponse(BaseModel):
+    ai_summary: str | None = None
+    model: str | None = None
+    generated_at: str | None = None
+    cached: bool = False
+    message: str | None = None

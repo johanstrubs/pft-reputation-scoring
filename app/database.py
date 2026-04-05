@@ -143,6 +143,41 @@ CREATE TABLE IF NOT EXISTS incident_events (
 
 CREATE INDEX IF NOT EXISTS idx_incident_events_incident ON incident_events(incident_id);
 CREATE INDEX IF NOT EXISTS idx_incident_events_validator ON incident_events(validator_key);
+
+CREATE TABLE IF NOT EXISTS ai_diagnostic_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_key TEXT NOT NULL,
+    round_id INTEGER NOT NULL,
+    model TEXT NOT NULL,
+    ai_summary TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    estimated_cost_cents REAL DEFAULT 0,
+    UNIQUE(public_key, round_id),
+    FOREIGN KEY (round_id) REFERENCES scoring_rounds(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_diagnostic_cache_pubkey_round ON ai_diagnostic_cache(public_key, round_id);
+
+CREATE TABLE IF NOT EXISTS ai_diagnostic_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_key TEXT NOT NULL,
+    round_id INTEGER,
+    ip_address TEXT,
+    model TEXT,
+    status TEXT NOT NULL,
+    cached BOOLEAN DEFAULT 0,
+    estimated_cost_cents REAL DEFAULT 0,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    created_at TEXT NOT NULL,
+    failure_reason TEXT,
+    FOREIGN KEY (round_id) REFERENCES scoring_rounds(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_diagnostic_requests_created_at ON ai_diagnostic_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_diagnostic_requests_ip_created_at ON ai_diagnostic_requests(ip_address, created_at DESC);
 """
 
 
@@ -279,6 +314,25 @@ class Database:
             )
             rows = await cursor.fetchall()
             return [{"round_id": r["round_id"], "composite_score": r["composite_score"], "timestamp": r["timestamp"]} for r in rows]
+
+    async def get_validator_diagnostic_history(self, public_key: str, limit: int = 84) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT sr.id as round_id, sr.timestamp, vs.composite_score, vs.agreement_24h, vs.agreement_30d,
+                          vs.uptime_pct, vs.latency_ms, vs.peer_count, vs.poll_success_pct, vs.server_version,
+                          vs.server_state
+                   FROM validator_scores vs
+                   JOIN scoring_rounds sr ON vs.round_id = sr.id
+                   WHERE vs.public_key = ?
+                   ORDER BY sr.id DESC
+                   LIMIT ?""",
+                (public_key, limit),
+            )
+            rows = await cursor.fetchall()
+        history = [dict(row) for row in rows]
+        history.reverse()
+        return history
 
     async def get_round_history(self, limit: int = 10) -> list[RoundSummary]:
         async with aiosqlite.connect(self.db_path) as db:
@@ -963,6 +1017,102 @@ class Database:
             )
             rows = await cursor.fetchall()
         return [self._row_to_incident_event(row) for row in rows]
+
+    async def get_ai_diagnostic_cache(self, public_key: str, round_id: int) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM ai_diagnostic_cache WHERE public_key = ? AND round_id = ?",
+                (public_key, round_id),
+            )
+            row = await cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "public_key": row["public_key"],
+            "round_id": row["round_id"],
+            "model": row["model"],
+            "ai_summary": row["ai_summary"],
+            "generated_at": row["generated_at"],
+            "input_tokens": row["input_tokens"],
+            "output_tokens": row["output_tokens"],
+            "estimated_cost_cents": row["estimated_cost_cents"],
+            "cached": True,
+        }
+
+    async def store_ai_diagnostic_cache(
+        self,
+        *,
+        public_key: str,
+        round_id: int,
+        model: str,
+        ai_summary: str,
+        generated_at: str,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        estimated_cost_cents: float = 0.0,
+    ):
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO ai_diagnostic_cache
+                   (public_key, round_id, model, ai_summary, generated_at, input_tokens, output_tokens, estimated_cost_cents)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(public_key, round_id) DO UPDATE SET
+                       model = excluded.model,
+                       ai_summary = excluded.ai_summary,
+                       generated_at = excluded.generated_at,
+                       input_tokens = excluded.input_tokens,
+                       output_tokens = excluded.output_tokens,
+                       estimated_cost_cents = excluded.estimated_cost_cents""",
+                (public_key, round_id, model, ai_summary, generated_at, input_tokens, output_tokens, estimated_cost_cents),
+            )
+            await db.commit()
+
+    async def log_ai_diagnostic_request(
+        self,
+        *,
+        public_key: str,
+        round_id: int | None,
+        ip_address: str | None,
+        status: str,
+        model: str | None = None,
+        cached: bool = False,
+        estimated_cost_cents: float = 0.0,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        failure_reason: str | None = None,
+        created_at: str | None = None,
+    ):
+        created_at = created_at or datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO ai_diagnostic_requests
+                   (public_key, round_id, ip_address, model, status, cached, estimated_cost_cents, input_tokens, output_tokens, created_at, failure_reason)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (public_key, round_id, ip_address, model, status, int(cached), estimated_cost_cents, input_tokens, output_tokens, created_at, failure_reason),
+            )
+            await db.commit()
+
+    async def count_ai_requests_since(self, since: str, *, ip_address: str | None = None, statuses: tuple[str, ...] = ("success", "cached")) -> int:
+        placeholders = ",".join("?" for _ in statuses)
+        params: list = list(statuses) + [since]
+        sql = f"SELECT COUNT(*) FROM ai_diagnostic_requests WHERE status IN ({placeholders}) AND created_at >= ?"
+        if ip_address is not None:
+            sql += " AND ip_address = ?"
+            params.append(ip_address)
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(sql, tuple(params))
+            row = await cursor.fetchone()
+        return int(row[0] or 0) if row else 0
+
+    async def sum_ai_cost_since(self, since: str, *, statuses: tuple[str, ...] = ("success",)) -> float:
+        placeholders = ",".join("?" for _ in statuses)
+        params: list = list(statuses) + [since]
+        sql = f"SELECT COALESCE(SUM(estimated_cost_cents), 0) FROM ai_diagnostic_requests WHERE status IN ({placeholders}) AND created_at >= ?"
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(sql, tuple(params))
+            row = await cursor.fetchone()
+        return float(row[0] or 0.0) if row else 0.0
 
     @staticmethod
     def _row_to_incident(row, include_events: bool = False) -> dict:

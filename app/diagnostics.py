@@ -405,3 +405,28 @@ def build_diagnostic_report(round_id: int, timestamp: str, scores: list[Validato
         "findings": findings,
         "strengths": strengths,
     }
+
+
+def build_peer_comparison(scores: list[ValidatorScore], public_key: str) -> dict:
+    validator = next((score for score in scores if score.public_key == public_key), None)
+    if not validator:
+        raise KeyError(public_key)
+
+    same_provider = [
+        score for score in scores
+        if score.public_key != public_key and score.metrics.isp and score.metrics.isp == validator.metrics.isp
+    ]
+
+    def avg(values: list[float]) -> float | None:
+        if not values:
+            return None
+        return round(sum(values) / len(values), 2)
+
+    return {
+        "provider": validator.metrics.isp,
+        "peer_count": len(same_provider),
+        "avg_composite_score": avg([score.composite_score for score in same_provider]),
+        "avg_latency_ms": avg([score.metrics.latency_ms for score in same_provider if score.metrics.latency_ms is not None]),
+        "avg_uptime_pct": avg([score.metrics.uptime_pct for score in same_provider if score.metrics.uptime_pct is not None]),
+        "avg_agreement_24h": avg([score.metrics.agreement_24h for score in same_provider if score.metrics.agreement_24h is not None]),
+    }

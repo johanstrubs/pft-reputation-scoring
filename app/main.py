@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.collector import DataCollector
+from app.diagnostic_ai import generate_ai_diagnostic, AIDiagnosticLimitError, AIDiagnosticUnavailableError
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -28,6 +29,7 @@ from app.models import (
     IncidentResponse,
     IncidentListResponse,
     DiagnosticReportResponse,
+    AIDiagnosticResponse,
 )
 
 logging.basicConfig(
@@ -243,6 +245,22 @@ async def diagnose_validator(public_key: str):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Validator not found") from exc
     return DiagnosticReportResponse(**report)
+
+
+@app.post("/api/diagnose/{public_key}/ai", response_model=AIDiagnosticResponse)
+async def diagnose_validator_ai(public_key: str, request: Request):
+    caller_ip = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip() or request.client.host
+    try:
+        result = await generate_ai_diagnostic(db, public_key=public_key, ip_address=caller_ip)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found") from exc
+    except AIDiagnosticLimitError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except AIDiagnosticUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return AIDiagnosticResponse(**result)
 
 
 # --- Alerts & Subscriptions ---

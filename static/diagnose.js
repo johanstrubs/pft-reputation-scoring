@@ -1,3 +1,7 @@
+const state = {
+    report: null,
+};
+
 function $(id) {
     return document.getElementById(id);
 }
@@ -31,9 +35,26 @@ function clearError() {
     banner.style.display = "none";
 }
 
+function showAiError(message) {
+    const banner = $("ai-error");
+    banner.textContent = message;
+    banner.style.display = "block";
+}
+
+function clearAiState() {
+    $("ai-error").textContent = "";
+    $("ai-error").style.display = "none";
+    $("ai-loading").style.display = "none";
+    $("ai-card").style.display = "none";
+    $("ai-meta").textContent = "";
+    $("ai-summary").textContent = "";
+}
+
 function setLoading(loading) {
     $("loading-card").style.display = loading ? "block" : "none";
-    $("diagnose-app").style.display = loading ? "none" : $("diagnose-app").style.display;
+    if (loading) {
+        $("diagnose-app").style.display = "none";
+    }
 }
 
 function updateShareLink(publicKey) {
@@ -106,8 +127,20 @@ function renderStrengths(report) {
     `).join("");
 }
 
+function renderAiAnalysis(payload) {
+    clearAiState();
+    if (!payload.ai_summary) {
+        showAiError(payload.message || "AI analysis is temporarily unavailable.");
+        return;
+    }
+    $("ai-card").style.display = "block";
+    $("ai-meta").textContent = `${payload.cached ? "Cached" : "Fresh"} advisory summary • ${payload.model} • ${new Date(payload.generated_at).toLocaleString()}`;
+    $("ai-summary").textContent = payload.ai_summary;
+}
+
 async function loadReport(publicKey) {
     clearError();
+    clearAiState();
     setLoading(true);
     try {
         const resp = await fetch(`/api/diagnose/${encodeURIComponent(publicKey)}`);
@@ -116,6 +149,7 @@ async function loadReport(publicKey) {
             throw new Error(data.detail || "Failed to load diagnostic report");
         }
         const report = await resp.json();
+        state.report = report;
         updateShareLink(publicKey);
         renderSummary(report);
         renderFindings(report);
@@ -123,9 +157,33 @@ async function loadReport(publicKey) {
         $("diagnose-app").style.display = "block";
     } catch (err) {
         $("diagnose-app").style.display = "none";
+        state.report = null;
         showError(err.message || "Failed to load diagnostic report");
     } finally {
         setLoading(false);
+    }
+}
+
+async function generateAiAnalysis() {
+    if (!state.report) {
+        showAiError("Load a validator report first.");
+        return;
+    }
+    clearAiState();
+    $("ai-loading").style.display = "block";
+    try {
+        const resp = await fetch(`/api/diagnose/${encodeURIComponent(state.report.public_key)}/ai`, {
+            method: "POST",
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            throw new Error(data.detail || data.message || "Failed to generate AI analysis");
+        }
+        renderAiAnalysis(data);
+    } catch (err) {
+        showAiError(err.message || "Failed to generate AI analysis");
+    } finally {
+        $("ai-loading").style.display = "none";
     }
 }
 
@@ -143,6 +201,7 @@ $("load-button").addEventListener("click", () => {
 });
 
 $("share-button").addEventListener("click", copyShareLink);
+$("ai-button").addEventListener("click", generateAiAnalysis);
 
 const params = new URLSearchParams(window.location.search);
 const prefilled = params.get("validator");

@@ -144,6 +144,10 @@ button, .secondary-link {
     text-align: center;
 }
 
+.ai-loading, .ai-card, .ai-error {
+    display: none;
+}
+
 .spinner {
     width: 28px;
     height: 28px;
@@ -211,6 +215,29 @@ button, .secondary-link {
 .finding-list, .strength-list {
     display: grid;
     gap: 12px;
+}
+
+.ai-controls {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.ai-card {
+    border-radius: 18px;
+    border: 1px solid rgba(105, 167, 255, 0.35);
+    background: rgba(105, 167, 255, 0.06);
+    padding: 18px;
+}
+
+.ai-meta {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.ai-summary {
+    line-height: 1.6;
 }
 
 .finding-card, .strength-card {

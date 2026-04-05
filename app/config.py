@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     weekly_digest_webhook_url: str = ""
     weekly_digest_day_utc: int = 0
     weekly_digest_hour_utc: int = 14
+    anthropic_api_key: str = ""
+    anthropic_model: str = ""
+    anthropic_daily_budget_cents: int = 50
+    anthropic_max_calls_per_hour: int = 30
+    anthropic_max_calls_per_ip_per_hour: int = 10
+    anthropic_timeout_seconds: int = 10
+    anthropic_max_tokens: int = 300
+    anthropic_input_cost_per_million: float = 1.0
+    anthropic_output_cost_per_million: float = 5.0
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
