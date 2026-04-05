@@ -263,6 +263,31 @@ async def diagnose_validator_ai(public_key: str, request: Request):
     return AIDiagnosticResponse(**result)
 
 
+@app.get("/api/diagnose/{public_key}/ai", response_model=AIDiagnosticResponse)
+async def get_cached_diagnose_validator_ai(public_key: str):
+    round_id, _, scores = await db.get_latest_scores()
+    if round_id is None or not scores:
+        raise HTTPException(status_code=503, detail="No scoring data available yet")
+    if not any(score.public_key == public_key for score in scores):
+        raise HTTPException(status_code=404, detail="Validator not found")
+    cached = await db.get_ai_diagnostic_cache(public_key, round_id)
+    if not cached:
+        return AIDiagnosticResponse(
+            ai_summary=None,
+            model=settings.anthropic_model or None,
+            generated_at=None,
+            cached=False,
+            message="No cached AI analysis exists for the current scoring round yet. Use POST or the page button to generate one.",
+        )
+    return AIDiagnosticResponse(
+        ai_summary=cached["ai_summary"],
+        model=cached["model"],
+        generated_at=cached["generated_at"],
+        cached=True,
+        message="Cached AI analysis reused for the current scoring round.",
+    )
+
+
 # --- Alerts & Subscriptions ---
 
 class SubscribeRequest(BaseModel):

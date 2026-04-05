@@ -375,3 +375,39 @@ async def test_diagnose_ai_endpoint_limit_response():
             resp = await client.post("/api/diagnose/nHWeak/ai")
     assert resp.status_code == 429
     assert "Temporarily unavailable" in resp.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_diagnose_ai_cached_get_endpoint(mock_scores):
+    transport = ASGITransport(app=app)
+    cached = {
+        "public_key": "nHTest1",
+        "round_id": 5,
+        "model": "claude-haiku-4-5",
+        "ai_summary": "Cached summary",
+        "generated_at": "2026-04-05T04:22:48.546230+00:00",
+        "cached": True,
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(5, "2026-03-17T12:00:00", mock_scores)), \
+             patch.object(db, "get_ai_diagnostic_cache", new_callable=AsyncMock, return_value=cached):
+            resp = await client.get("/api/diagnose/nHTest1/ai")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["cached"] is True
+    assert data["ai_summary"] == "Cached summary"
+
+
+@pytest.mark.anyio
+async def test_diagnose_ai_cached_get_endpoint_empty(mock_scores):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(5, "2026-03-17T12:00:00", mock_scores)), \
+             patch.object(db, "get_ai_diagnostic_cache", new_callable=AsyncMock, return_value=None):
+            resp = await client.get("/api/diagnose/nHTest1/ai")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["cached"] is False
+    assert data["ai_summary"] is None
