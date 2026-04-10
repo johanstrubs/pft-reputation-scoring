@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Readiness Checker</title>
+    <link rel="stylesheet" href="/static/readiness.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/leaderboard">Leaderboard</a>
+            <a href="/diagnose">Diagnostics</a>
+            <a href="/simulator">Score Simulator</a>
+            <a href="/incidents">Incident Timeline</a>
+        </nav>
+
+        <section class="hero">
+            <h1>Validator Readiness Checker</h1>
+            <p>Audit validator configuration, operational health, and domain attestation from the latest stored network data, with bounded DNS and <code>.well-known</code> checks layered on top.</p>
+        </section>
+
+        <section class="lookup-card">
+            <label class="lookup-label" for="validator-key">Validator Public Key</label>
+            <div class="lookup-row">
+                <input id="validator-key" type="text" placeholder="Paste an nH... validator public key">
+                <button id="load-button" class="primary-button">Run Readiness Audit</button>
+            </div>
+            <div class="button-row">
+                <button id="share-button" class="secondary-button" type="button">Copy Share Link</button>
+                <a id="json-link" class="secondary-link" href="/api/readiness/" target="_blank" rel="noreferrer">Open JSON Report</a>
+            </div>
+            <div class="helper-text">Tip: add <code>?validator=&lt;pubkey&gt;</code> to share a prefilled readiness URL.</div>
+            <div class="error-banner" id="error-banner"></div>
+        </section>
+
+        <section class="loading-card" id="loading-card">
+            <div class="spinner"></div>
+            Loading readiness audit...
+        </section>
+
+        <section class="app" id="readiness-app">
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="eyebrow">Overall Readiness</div>
+                    <div class="headline" id="overall-status">-</div>
+                    <div class="subline" id="status-summary">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Validator</div>
+                    <div class="headline" id="validator-name">-</div>
+                    <div class="subline" id="validator-key-text">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Latest Round</div>
+                    <div class="headline" id="round-id">-</div>
+                    <div class="subline" id="round-ts">-</div>
+                </div>
+            </div>
+
+            <div id="category-sections"></div>
+        </section>
+
+        <footer>
+            Readiness uses stored scoring/topology data plus bounded DNS and <code>.well-known</code> checks |
+            <a href="/diagnose">Diagnostics</a> |
+            <a href="/leaderboard">Leaderboard</a> |
+            <a href="/simulator">Score Simulator</a>
+        </footer>
+    </div>
+
+    <script src="/static/readiness.js"></script>
+</body>
+</html>

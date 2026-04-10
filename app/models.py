@@ -15,11 +15,13 @@ class ValidatorMetrics(BaseModel):
     latency_ms: float | None = None
     peer_count: int | None = None
     avg_ledger_interval: float | None = None  # seconds per ledger
+    validated_ledger_age: float | None = None
     server_version: str | None = None
     server_state: str | None = None
     asn: int | None = None
     isp: str | None = None
     country: str | None = None
+    node_ip: str | None = None
 
 
 class ValidatorSubScores(BaseModel):
@@ -180,3 +182,24 @@ class AIDiagnosticResponse(BaseModel):
     generated_at: str | None = None
     cached: bool = False
     message: str | None = None
+
+
+class ReadinessCheckResponse(BaseModel):
+    name: str
+    category: str
+    status: str
+    detected_value: str
+    expected_value: str
+    remediation: str | None = None
+    source_timestamp: str
+
+
+class ReadinessReportResponse(BaseModel):
+    public_key: str
+    domain: str | None = None
+    round_id: int
+    timestamp: str
+    overall_status: str
+    status_summary: str
+    json_report_url: str
+    checks: list[ReadinessCheckResponse]

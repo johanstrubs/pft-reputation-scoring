@@ -122,6 +122,15 @@ async def test_diagnose_page():
 
 
 @pytest.mark.anyio
+async def test_readiness_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readiness")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_network_topology_includes_version_and_strict_enrichment(mock_scores):
     partial = ValidatorScore(
         public_key="nHPartial",
@@ -411,3 +420,48 @@ async def test_diagnose_ai_cached_get_endpoint_empty(mock_scores):
     data = resp.json()
     assert data["cached"] is False
     assert data["ai_summary"] is None
+
+
+@pytest.mark.anyio
+async def test_readiness_endpoint_success(mock_scores):
+    transport = ASGITransport(app=app)
+    payload = {
+        "public_key": "nHTest1",
+        "domain": "test1.example.com",
+        "round_id": 7,
+        "timestamp": "2026-04-10T12:00:00+00:00",
+        "overall_status": "ready",
+        "status_summary": "Ready",
+        "json_report_url": "/api/readiness/nHTest1",
+        "checks": [
+            {
+                "name": "Version parity",
+                "category": "configuration",
+                "status": "pass",
+                "detected_value": "1.0.0",
+                "expected_value": "1.0.0",
+                "remediation": None,
+                "source_timestamp": "2026-04-10T12:00:00+00:00",
+            }
+        ],
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(7, "2026-04-10T12:00:00+00:00", mock_scores)), \
+             patch("app.main.build_readiness_report", new=AsyncMock(return_value=payload)):
+            resp = await client.get("/api/readiness/nHTest1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["overall_status"] == "ready"
+    assert data["checks"][0]["name"] == "Version parity"
+
+
+@pytest.mark.anyio
+async def test_readiness_endpoint_not_found(mock_scores):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(7, "2026-04-10T12:00:00+00:00", mock_scores)), \
+             patch("app.main.build_readiness_report", new=AsyncMock(side_effect=KeyError("nHMissing"))):
+            resp = await client.get("/api/readiness/nHMissing")
+    assert resp.status_code == 404

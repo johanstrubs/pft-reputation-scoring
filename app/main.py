@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.config import settings
 from app.collector import DataCollector
 from app.diagnostic_ai import generate_ai_diagnostic, AIDiagnosticLimitError, AIDiagnosticUnavailableError
+from app.readiness import build_readiness_report
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -30,6 +31,7 @@ from app.models import (
     IncidentListResponse,
     DiagnosticReportResponse,
     AIDiagnosticResponse,
+    ReadinessReportResponse,
 )
 
 logging.basicConfig(
@@ -286,6 +288,20 @@ async def get_cached_diagnose_validator_ai(public_key: str):
         cached=True,
         message="Cached AI analysis reused for the current scoring round.",
     )
+
+
+@app.get("/api/readiness/{public_key}", response_model=ReadinessReportResponse)
+async def get_validator_readiness(public_key: str):
+    round_id, round_ts, scores = await db.get_latest_scores()
+    if round_id is None:
+        raise HTTPException(status_code=503, detail="No scoring data available yet")
+    try:
+        report = await build_readiness_report(round_id, round_ts, scores, public_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found") from exc
+    return ReadinessReportResponse(**report)
 
 
 # --- Alerts & Subscriptions ---
@@ -578,6 +594,11 @@ async def incidents_page():
 @app.get("/diagnose")
 async def diagnose_page():
     return FileResponse(os.path.join(STATIC_DIR, "diagnose.html"))
+
+
+@app.get("/readiness")
+async def readiness_page():
+    return FileResponse(os.path.join(STATIC_DIR, "readiness.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -186,6 +186,7 @@ class DataCollector:
                 if node.get("country_code"):
                     s.metrics.country = node["country_code"]
                 if ip:
+                    s.metrics.node_ip = ip
                     ip_by_master[master] = ip
                 enriched_count += 1
 
@@ -232,6 +233,7 @@ class DataCollector:
                     s.domain = result["server_domain"]
                 # RPC validated_ledger.age is the most accurate ledger interval
                 if result.get("validated_ledger_age") is not None:
+                    s.metrics.validated_ledger_age = float(result["validated_ledger_age"])
                     s.metrics.avg_ledger_interval = float(result["validated_ledger_age"])
                 # Compute uptime-based ledger interval from RPC complete_ledgers
                 if s.metrics.avg_ledger_interval is None and result.get("complete_ledgers") and result.get("uptime"):

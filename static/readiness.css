@@ -1,0 +1,84 @@
+:root {
+    color-scheme: dark;
+    --bg: #0b1220;
+    --panel: #141e33;
+    --panel-2: #1b2842;
+    --line: #2d3e62;
+    --text: #ebf1fb;
+    --muted: #9db0cd;
+    --accent: #6aa8ff;
+    --pass: #59d88f;
+    --warn: #ffcc67;
+    --fail: #ff7b7b;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: "Avenir Next", "Segoe UI", sans-serif;
+    background: radial-gradient(circle at top, #1a2744, var(--bg) 45%);
+    color: var(--text);
+}
+.container { max-width: 1180px; margin: 0 auto; padding: 28px 20px 56px; }
+.top-nav, .hero, .lookup-card, .loading-card, .summary-card, .category-card {
+    background: rgba(20, 30, 51, 0.94);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: 0 18px 48px rgba(0,0,0,0.22);
+}
+.top-nav {
+    display: flex; gap: 16px; padding: 14px 18px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.top-nav a, footer a, .secondary-link { color: var(--accent); text-decoration: none; }
+.hero, .lookup-card, .loading-card, .category-card { padding: 24px; margin-bottom: 18px; }
+.hero h1 { margin: 0 0 10px; font-size: clamp(2rem, 4vw, 3rem); }
+.lookup-label, .helper-text, .subline, .eyebrow, .check-meta, .section-note { color: var(--muted); }
+.lookup-row, .button-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.lookup-row { margin-top: 10px; }
+.button-row { margin-top: 14px; }
+input, button, .secondary-link {
+    border-radius: 14px;
+    font: inherit;
+}
+input {
+    flex: 1; min-width: 240px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); padding: 13px 14px;
+}
+button, .secondary-link { padding: 13px 18px; }
+.primary-button { background: linear-gradient(135deg, #2d67ff, #60a6ff); color: #fff; border: none; cursor: pointer; }
+.secondary-button, .secondary-link { background: transparent; border: 1px solid var(--line); color: var(--text); cursor: pointer; }
+.secondary-link { display: inline-flex; align-items: center; justify-content: center; }
+.error-banner {
+    display: none; margin-top: 14px; color: #ffd0d0; background: rgba(255,123,123,0.12); border: 1px solid rgba(255,123,123,0.35); border-radius: 14px; padding: 12px 14px;
+}
+.loading-card { display: none; text-align: center; }
+.spinner {
+    width: 28px; height: 28px; margin: 0 auto 10px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); border-top-color: var(--accent); animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.app { display: none; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.summary-card { padding: 20px; }
+.eyebrow { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; }
+.headline { font-size: clamp(1.5rem, 3vw, 2.2rem); margin: 10px 0 6px; font-weight: 700; }
+.headline.ready { color: var(--pass); }
+.headline.needs_attention { color: var(--warn); }
+.headline.not_ready { color: var(--fail); }
+.category-title { margin: 0 0 6px; font-size: 1.35rem; }
+.check-list { display: grid; gap: 12px; }
+.check-card { border-radius: 18px; border: 1px solid var(--line); padding: 18px; background: rgba(255,255,255,0.025); }
+.check-card.pass { border-color: rgba(89,216,143,0.35); }
+.check-card.warn { border-color: rgba(255,204,103,0.35); }
+.check-card.fail { border-color: rgba(255,123,123,0.35); }
+.status-chip {
+    display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
+}
+.status-chip.pass { background: rgba(89,216,143,0.12); color: var(--pass); }
+.status-chip.warn { background: rgba(255,204,103,0.12); color: var(--warn); }
+.status-chip.fail { background: rgba(255,123,123,0.12); color: var(--fail); }
+.check-name { font-size: 1.08rem; font-weight: 700; margin-bottom: 8px; }
+.check-meta { margin-bottom: 10px; }
+code { font-family: "SFMono-Regular", Consolas, monospace; }
+pre {
+    white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 14px; padding: 12px; color: var(--text); margin: 12px 0 0;
+}
+footer { margin-top: 22px; text-align: center; color: var(--muted); }
