@@ -14,6 +14,7 @@ from app.config import settings
 from app.collector import DataCollector
 from app.diagnostic_ai import generate_ai_diagnostic, AIDiagnosticLimitError, AIDiagnosticUnavailableError
 from app.readiness import build_readiness_report
+from app.upgrades import build_upgrade_report
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -32,6 +33,7 @@ from app.models import (
     DiagnosticReportResponse,
     AIDiagnosticResponse,
     ReadinessReportResponse,
+    UpgradesResponse,
 )
 
 logging.basicConfig(
@@ -302,6 +304,19 @@ async def get_validator_readiness(public_key: str):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Validator not found") from exc
     return ReadinessReportResponse(**report)
+
+
+@app.get("/api/upgrades", response_model=UpgradesResponse)
+async def get_upgrades():
+    round_id, round_ts, scores = await db.get_latest_scores()
+    if round_id is None:
+        raise HTTPException(status_code=503, detail="No scoring data available yet")
+    history_rows = await db.get_upgrade_history_rows()
+    try:
+        report = build_upgrade_report(round_id, round_ts, scores, history_rows)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return UpgradesResponse(**report)
 
 
 # --- Alerts & Subscriptions ---
@@ -599,6 +614,11 @@ async def diagnose_page():
 @app.get("/readiness")
 async def readiness_page():
     return FileResponse(os.path.join(STATIC_DIR, "readiness.html"))
+
+
+@app.get("/upgrades")
+async def upgrades_page():
+    return FileResponse(os.path.join(STATIC_DIR, "upgrades.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

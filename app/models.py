@@ -203,3 +203,34 @@ class ReadinessReportResponse(BaseModel):
     status_summary: str
     json_report_url: str
     checks: list[ReadinessCheckResponse]
+
+
+class UpgradeDistributionEntryResponse(BaseModel):
+    version: str
+    count: int
+    percentage: float
+
+
+class LaggingValidatorResponse(BaseModel):
+    public_key: str
+    domain: str | None = None
+    current_version: str
+    days_behind: int
+
+
+class UpgradeHistoryEntryResponse(BaseModel):
+    date: str
+    percentage: float
+    upgraded_count: int
+    total_validators: int
+
+
+class UpgradesResponse(BaseModel):
+    latest_version: str | None = None
+    total_validators: int
+    upgraded_count: int
+    upgraded_pct: float
+    version_distribution: list[UpgradeDistributionEntryResponse]
+    lagging_validators: list[LaggingValidatorResponse]
+    adoption_history: list[UpgradeHistoryEntryResponse]
+    json_report_url: str

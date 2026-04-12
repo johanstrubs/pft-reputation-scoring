@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Upgrade Readiness Tracker</title>
+    <link rel="stylesheet" href="/static/upgrades.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/leaderboard">Leaderboard</a>
+            <a href="/diagnose">Diagnostics</a>
+            <a href="/readiness">Readiness Checker</a>
+            <a href="/network">Network Map</a>
+        </nav>
+
+        <section class="hero">
+            <h1>Network Upgrade Readiness Tracker</h1>
+            <p>Track the highest observed release, adoption velocity, and which validators are still lagging during network rollouts.</p>
+        </section>
+
+        <section class="loading-card" id="loading-card">
+            <div class="spinner"></div>
+            Loading upgrade tracker...
+        </section>
+
+        <div class="error-banner" id="error-banner"></div>
+
+        <section class="app" id="upgrades-app">
+            <section class="summary-card">
+                <div class="eyebrow">Latest Observed Release</div>
+                <div class="headline" id="latest-version">-</div>
+                <div class="subline" id="upgrade-summary">-</div>
+                <div class="progress-shell">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div class="summary-actions">
+                    <a id="json-link" class="secondary-link" href="/api/upgrades" target="_blank" rel="noreferrer">Open JSON Report</a>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Adoption Velocity</h2>
+                    <div class="panel-note" id="history-note">Daily snapshots since the latest version first appeared</div>
+                </div>
+                <div id="chart-empty" class="empty-state">No adoption history is available yet.</div>
+                <svg id="adoption-chart" viewBox="0 0 700 220" preserveAspectRatio="none" aria-label="Adoption velocity chart"></svg>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Current Version Distribution</h2>
+                    <div class="panel-note" id="distribution-note">-</div>
+                </div>
+                <div id="distribution-list" class="distribution-list"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Lagging Validators</h2>
+                    <div class="panel-note" id="lagging-note">-</div>
+                </div>
+                <div id="current-version-card" class="current-version-card"></div>
+                <div id="lagging-table" class="table-wrap"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Upgrade Template</h2>
+                    <div class="panel-note">General commands, not release-specific notes</div>
+                </div>
+                <pre class="command-block">docker compose pull
+docker compose up -d
+docker compose ps
+docker compose logs --tail=100
+curl -s http://127.0.0.1:5005 -d '{"method":"server_info","params":[{}]}' | grep build_version</pre>
+            </section>
+        </section>
+    </div>
+
+    <script src="/static/upgrades.js"></script>
+</body>
+</html>

@@ -359,6 +359,23 @@ class Database:
                 for r in rows
             ]
 
+    async def get_upgrade_history_rows(self) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT sr.id AS round_id,
+                          sr.timestamp AS round_timestamp,
+                          sr.validator_count,
+                          vs.public_key,
+                          vs.domain,
+                          vs.server_version
+                   FROM scoring_rounds sr
+                   JOIN validator_scores vs ON vs.round_id = sr.id
+                   ORDER BY sr.id ASC, vs.public_key ASC"""
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
     async def get_all_validator_trends(self, hours: int = 168) -> dict[str, list[dict]]:
         """Get composite score history for all validators over the given hours."""
         async with aiosqlite.connect(self.db_path) as db:

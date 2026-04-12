@@ -131,6 +131,15 @@ async def test_readiness_page():
 
 
 @pytest.mark.anyio
+async def test_upgrades_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/upgrades")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_network_topology_includes_version_and_strict_enrichment(mock_scores):
     partial = ValidatorScore(
         public_key="nHPartial",
@@ -465,3 +474,36 @@ async def test_readiness_endpoint_not_found(mock_scores):
              patch("app.main.build_readiness_report", new=AsyncMock(side_effect=KeyError("nHMissing"))):
             resp = await client.get("/api/readiness/nHMissing")
     assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_upgrades_endpoint_success(mock_scores):
+    transport = ASGITransport(app=app)
+    payload = {
+        "latest_version": "2.4.0",
+        "total_validators": 2,
+        "upgraded_count": 1,
+        "upgraded_pct": 50.0,
+        "version_distribution": [
+            {"version": "2.4.0", "count": 1, "percentage": 50.0},
+            {"version": "2.3.0", "count": 1, "percentage": 50.0},
+        ],
+        "lagging_validators": [
+            {"public_key": "nHOld", "domain": "old.example.com", "current_version": "2.3.0", "days_behind": 2}
+        ],
+        "adoption_history": [
+            {"date": "2026-04-10", "percentage": 50.0, "upgraded_count": 1, "total_validators": 2}
+        ],
+        "json_report_url": "/api/upgrades",
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(9, "2026-04-12T12:00:00+00:00", mock_scores)), \
+             patch.object(db, "get_upgrade_history_rows", new_callable=AsyncMock, return_value=[]), \
+             patch("app.main.build_upgrade_report", return_value=payload):
+            resp = await client.get("/api/upgrades")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["latest_version"] == "2.4.0"
+    assert data["version_distribution"][0]["version"] == "2.4.0"
+    assert data["lagging_validators"][0]["days_behind"] == 2

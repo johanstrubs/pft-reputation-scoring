@@ -42,6 +42,8 @@ class NodeValidatorMap:
         }
 
     def needs_probe(self) -> bool:
+        if self._last_probe_time == 0:
+            return True
         return (time.monotonic() - self._last_probe_time) > MAPPING_CACHE_TTL
 
     def mark_probed(self):
