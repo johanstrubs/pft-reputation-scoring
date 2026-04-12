@@ -127,6 +127,15 @@ async def test_peers_page():
         resp = await client.get("/peers")
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
+async def test_remediate_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/remediate")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
     assert "text/html" in resp.headers["content-type"]
 
 
@@ -689,4 +698,81 @@ async def test_peers_endpoint_not_found(mock_scores):
         with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(9, "2026-04-12T12:00:00+00:00", mock_scores)), \
              patch("app.main.build_peer_report", new=AsyncMock(side_effect=KeyError("nHMissing"))):
             resp = await client.get("/api/peers/nHMissing")
+    assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_remediate_endpoint_success(mock_scores):
+    transport = ASGITransport(app=app)
+    payload = {
+        "public_key": "nHTest1",
+        "domain": "test1.example.com",
+        "round_id": 9,
+        "timestamp": "2026-04-12T12:00:00+00:00",
+        "status_summary": "2 actionable remediation items",
+        "total_estimated_score_improvement": 14.0,
+        "summary_counts": {"critical": 1, "warning": 1, "advisory": 1},
+        "source_status": {
+            "readiness": {"timestamp": "2026-04-12T12:00:00+00:00", "status": "not_ready", "json_report_url": "/api/readiness/nHTest1", "count": None},
+            "diagnose": {"timestamp": "2026-04-12T12:00:00+00:00", "status": "critical", "json_report_url": "/api/diagnose/nHTest1", "count": None},
+        },
+        "actionable_findings": [
+            {
+                "source": "readiness",
+                "sources": ["diagnose", "readiness"],
+                "source_timestamp": "2026-04-12T12:00:00+00:00",
+                "category": "version",
+                "metric": "version",
+                "severity": "critical",
+                "title": "Version parity",
+                "detected_value": "1.0.0",
+                "expected_value": "3.0.0",
+                "summary": "Upgrade the validator.",
+                "commands": ["docker compose pull", "docker compose up -d"],
+                "rollback_note": "Check logs first.",
+                "estimated_score_impact": 10.0,
+                "impact_confidence": "direct",
+                "dedupe_key": "version::version::3.0.0",
+            }
+        ],
+        "advisories": [
+            {
+                "source": "diagnose",
+                "sources": ["diagnose"],
+                "source_timestamp": "2026-04-12T12:00:00+00:00",
+                "category": "operations",
+                "metric": "diversity",
+                "severity": "advisory",
+                "title": "Hosting concentration is limiting your diversity score",
+                "detected_value": "40.0%",
+                "expected_value": "> 50.0% diversity sub-score",
+                "summary": "Consider moving over time.",
+                "commands": ["open https://dashboard.pftoligarchy.com/diversity"],
+                "rollback_note": None,
+                "estimated_score_impact": 10.0,
+                "impact_confidence": "approximate",
+                "dedupe_key": "operations::diversity::50.0pct_diversity_sub-score",
+            }
+        ],
+        "json_report_url": "/api/remediate/nHTest1",
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(9, "2026-04-12T12:00:00+00:00", mock_scores)), \
+             patch("app.main.build_remediation_report", new=AsyncMock(return_value=payload)):
+            resp = await client.get("/api/remediate/nHTest1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status_summary"] == "2 actionable remediation items"
+    assert data["actionable_findings"][0]["sources"] == ["diagnose", "readiness"]
+
+
+@pytest.mark.anyio
+async def test_remediate_endpoint_not_found(mock_scores):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(9, "2026-04-12T12:00:00+00:00", mock_scores)), \
+             patch("app.main.build_remediation_report", new=AsyncMock(side_effect=KeyError("nHMissing"))):
+            resp = await client.get("/api/remediate/nHMissing")
     assert resp.status_code == 404

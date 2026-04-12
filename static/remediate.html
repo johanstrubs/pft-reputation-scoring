@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Remediation Command Center</title>
+    <link rel="stylesheet" href="/static/remediate.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/leaderboard">Leaderboard</a>
+            <a href="/readiness">Readiness</a>
+            <a href="/diagnose">Diagnostics</a>
+            <a href="/peers">Peers</a>
+        </nav>
+
+        <section class="hero">
+            <h1>Validator Remediation Command Center</h1>
+            <p>One operator action plan across readiness, diagnostics, incidents, and peer analysis. Actionable items stay front and center, advisories stay collapsed until you need them.</p>
+        </section>
+
+        <section class="lookup-card">
+            <label class="lookup-label" for="validator-key">Validator Public Key</label>
+            <div class="lookup-row">
+                <input id="validator-key" type="text" placeholder="Paste an nH... validator public key">
+                <button id="load-button" class="primary-button">Build Remediation Plan</button>
+            </div>
+            <div class="button-row">
+                <button id="share-button" class="secondary-button" type="button">Copy Share Link</button>
+                <a id="json-link" class="secondary-link" href="/api/remediate/" target="_blank" rel="noreferrer">Open JSON Report</a>
+            </div>
+            <div class="helper-text">Tip: add <code>?validator=&lt;pubkey&gt;</code> to share a prefilled remediation URL.</div>
+            <div class="error-banner" id="error-banner"></div>
+        </section>
+
+        <section class="loading-card" id="loading-card">
+            <div class="spinner"></div>
+            Building remediation plan...
+        </section>
+
+        <section class="app" id="remediation-app">
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="eyebrow">Validator</div>
+                    <div class="headline" id="validator-name">-</div>
+                    <div class="subline" id="validator-key-text">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Action Summary</div>
+                    <div class="headline" id="summary-status">-</div>
+                    <div class="subline" id="summary-impact">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Severity Mix</div>
+                    <div class="headline" id="severity-mix">-</div>
+                    <div class="subline" id="report-timestamp">-</div>
+                </div>
+            </div>
+
+            <section class="panel">
+                <div class="section-head">
+                    <h2>Upstream Freshness</h2>
+                </div>
+                <div id="source-status" class="source-grid"></div>
+            </section>
+
+            <section class="panel">
+                <div class="section-head">
+                    <h2>Actionable Findings</h2>
+                </div>
+                <div id="actionable-findings" class="finding-list"></div>
+            </section>
+
+            <details class="panel advisory-panel">
+                <summary>Advisories</summary>
+                <div id="advisories" class="finding-list advisory-list"></div>
+            </details>
+        </section>
+
+        <footer>
+            Remediation reuses live readiness, diagnostics, incidents, and peers data |
+            <a href="/readiness">Readiness</a> |
+            <a href="/diagnose">Diagnostics</a> |
+            <a href="/peers">Peers</a>
+        </footer>
+    </div>
+
+    <script src="/static/remediate.js"></script>
+</body>
+</html>

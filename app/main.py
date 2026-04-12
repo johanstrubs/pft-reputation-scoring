@@ -17,6 +17,7 @@ from app.readiness import build_readiness_report
 from app.upgrades import build_upgrade_report
 from app.diversity import build_diversity_report
 from app.peers import build_peer_report
+from app.remediation import build_remediation_report
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -38,6 +39,7 @@ from app.models import (
     UpgradesResponse,
     DiversityReportResponse,
     PeerReportResponse,
+    RemediationReportResponse,
 )
 
 logging.basicConfig(
@@ -351,6 +353,20 @@ async def get_peers(public_key: str):
     return PeerReportResponse(**report)
 
 
+@app.get("/api/remediate/{public_key}", response_model=RemediationReportResponse)
+async def get_remediation(public_key: str):
+    round_id, round_ts, scores = await db.get_latest_scores()
+    if round_id is None:
+        raise HTTPException(status_code=503, detail="No scoring data available yet")
+    try:
+        report = await build_remediation_report(db, round_id, round_ts, scores, public_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found") from exc
+    return RemediationReportResponse(**report)
+
+
 # --- Alerts & Subscriptions ---
 
 class SubscribeRequest(BaseModel):
@@ -661,6 +677,11 @@ async def diversity_page():
 @app.get("/peers")
 async def peers_page():
     return FileResponse(os.path.join(STATIC_DIR, "peers.html"))
+
+
+@app.get("/remediate")
+async def remediate_page():
+    return FileResponse(os.path.join(STATIC_DIR, "remediate.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

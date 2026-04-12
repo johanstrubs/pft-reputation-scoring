@@ -360,3 +360,42 @@ class PeerReportResponse(BaseModel):
     node_rows: list[PeerNodeResponse]
     add_recommendations: list[PeerRecommendationResponse]
     drop_recommendations: list[PeerRecommendationResponse]
+
+
+class RemediationFindingResponse(BaseModel):
+    source: str
+    sources: list[str]
+    source_timestamp: str
+    category: str
+    metric: str
+    severity: str
+    title: str
+    detected_value: str
+    expected_value: str
+    summary: str
+    commands: list[str]
+    rollback_note: str | None = None
+    estimated_score_impact: float
+    impact_confidence: str
+    dedupe_key: str
+
+
+class RemediationSourceStatusResponse(BaseModel):
+    timestamp: str
+    status: str
+    json_report_url: str | None = None
+    count: int | None = None
+
+
+class RemediationReportResponse(BaseModel):
+    public_key: str
+    domain: str | None = None
+    round_id: int
+    timestamp: str
+    status_summary: str
+    total_estimated_score_improvement: float
+    summary_counts: dict[str, int]
+    source_status: dict[str, RemediationSourceStatusResponse]
+    actionable_findings: list[RemediationFindingResponse]
+    advisories: list[RemediationFindingResponse]
+    json_report_url: str
