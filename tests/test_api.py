@@ -118,6 +118,15 @@ async def test_diagnose_page():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/diagnose")
     assert resp.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_peers_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/peers")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
     assert "text/html" in resp.headers["content-type"]
 
 
@@ -586,3 +595,98 @@ async def test_diversity_endpoint_success(mock_scores):
     data = resp.json()
     assert data["current_context"]["provider"] == "Hetzner"
     assert data["recommendations"][0]["target_bundle"]["provider"] == "OVHcloud"
+
+
+@pytest.mark.anyio
+async def test_peers_endpoint_success(mock_scores):
+    transport = ASGITransport(app=app)
+    payload = {
+        "public_key": "nHTest1",
+        "domain": "test1.example.com",
+        "mode": "candidate_only",
+        "mode_banner": "Candidate-only mode is active.",
+        "json_report_url": "/api/peers/nHTest1",
+        "disclaimer": "Peer recommendations are heuristics.",
+        "observable_node": {
+            "node_public_key": "n9Test1",
+            "validator_public_key": "nHTest1",
+            "domain": "test1.example.com",
+            "ip": "203.0.113.10",
+            "port": 2559,
+            "provider": "Hetzner",
+            "asn": 24940,
+            "country": "DE",
+            "server_version": "3.0.0",
+            "latency_ms": 42.0,
+            "agreement_24h": 0.98,
+            "quality_rating": "good",
+            "quality_reason": "healthy node",
+            "non_validating": False,
+        },
+        "summary": {
+            "total_nodes_analyzed": 8,
+            "current_peer_count": 0,
+            "good_count": 4,
+            "acceptable_count": 3,
+            "risky_count": 1,
+            "projected_composite_score": 85.65,
+            "projected_rank": 1,
+            "projected_rank_delta": 0,
+        },
+        "risk_findings": [
+            {"title": "Hetzner accounts for 40%", "severity": "warn", "detail": "Concentration is elevated."}
+        ],
+        "table_title": "Observed Network Node Candidates",
+        "node_rows": [
+            {
+                "node_public_key": "n9Peer1",
+                "validator_public_key": "nHPeer1",
+                "domain": "peer1.example.com",
+                "ip": "203.0.113.11",
+                "port": 2559,
+                "provider": "Vultr",
+                "asn": 20473,
+                "country": "US",
+                "server_version": "3.0.0",
+                "latency_ms": 51.0,
+                "agreement_24h": 0.99,
+                "quality_rating": "good",
+                "quality_reason": "healthy node",
+                "non_validating": False,
+            }
+        ],
+        "add_recommendations": [
+            {
+                "node_public_key": "n9Peer1",
+                "validator_public_key": "nHPeer1",
+                "ip": "203.0.113.11",
+                "port": 2559,
+                "provider": "Vultr",
+                "asn": 20473,
+                "country": "US",
+                "quality_rating": "good",
+                "reason": "Introduces a new ASN.",
+            }
+        ],
+        "drop_recommendations": [],
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(9, "2026-04-12T12:00:00+00:00", mock_scores)), \
+             patch("app.main.build_peer_report", new=AsyncMock(return_value=payload)):
+            resp = await client.get("/api/peers/nHTest1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "candidate_only"
+    assert data["add_recommendations"][0]["provider"] == "Vultr"
+
+
+@pytest.mark.anyio
+async def test_peers_endpoint_not_found(mock_scores):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(9, "2026-04-12T12:00:00+00:00", mock_scores)), \
+             patch("app.main.build_peer_report", new=AsyncMock(side_effect=KeyError("nHMissing"))):
+            resp = await client.get("/api/peers/nHMissing")
+    assert resp.status_code == 404

@@ -298,3 +298,65 @@ class DiversityReportResponse(BaseModel):
     recommendations: list[DiversityProjectionResponse]
     disclaimer: str
     json_report_url: str
+
+
+class PeerNodeResponse(BaseModel):
+    node_public_key: str | None = None
+    validator_public_key: str | None = None
+    domain: str | None = None
+    ip: str | None = None
+    port: int | None = None
+    provider: str | None = None
+    asn: int | None = None
+    country: str | None = None
+    server_version: str | None = None
+    latency_ms: float | None = None
+    agreement_24h: float | None = None
+    quality_rating: str
+    quality_reason: str
+    non_validating: bool = False
+
+
+class PeerRiskFindingResponse(BaseModel):
+    title: str
+    severity: str
+    detail: str
+
+
+class PeerRecommendationResponse(BaseModel):
+    node_public_key: str | None = None
+    validator_public_key: str | None = None
+    ip: str | None = None
+    port: int | None = None
+    provider: str | None = None
+    asn: int | None = None
+    country: str | None = None
+    quality_rating: str
+    reason: str
+
+
+class PeerSummaryResponse(BaseModel):
+    total_nodes_analyzed: int
+    current_peer_count: int
+    good_count: int
+    acceptable_count: int
+    risky_count: int
+    projected_composite_score: float
+    projected_rank: int
+    projected_rank_delta: int
+
+
+class PeerReportResponse(BaseModel):
+    public_key: str
+    domain: str | None = None
+    mode: str
+    mode_banner: str
+    json_report_url: str
+    disclaimer: str
+    observable_node: PeerNodeResponse | None = None
+    summary: PeerSummaryResponse
+    risk_findings: list[PeerRiskFindingResponse]
+    table_title: str
+    node_rows: list[PeerNodeResponse]
+    add_recommendations: list[PeerRecommendationResponse]
+    drop_recommendations: list[PeerRecommendationResponse]

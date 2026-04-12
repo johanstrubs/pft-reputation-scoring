@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Peer Quality Recommender</title>
+    <link rel="stylesheet" href="/static/peers.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/leaderboard">Leaderboard</a>
+            <a href="/diagnose">Diagnostics</a>
+            <a href="/readiness">Readiness Checker</a>
+            <a href="/network">Network Map</a>
+        </nav>
+
+        <section class="hero">
+            <h1>Validator Peer Quality Recommender</h1>
+            <p>Assess observable node quality, concentration risk, and stronger peer candidates from live scoring and topology data. If crawl adjacency is available, we analyze the current peer set directly; otherwise we fall back to candidate-only mode.</p>
+        </section>
+
+        <section class="lookup-card">
+            <label class="lookup-label" for="validator-key">Validator Public Key</label>
+            <div class="lookup-row">
+                <input id="validator-key" type="text" placeholder="Paste an nH... validator public key">
+                <button id="load-button" class="primary-button">Analyze Peer Set</button>
+            </div>
+            <div class="button-row">
+                <button id="share-button" class="secondary-button" type="button">Copy Share Link</button>
+                <a id="json-link" class="secondary-link" href="/api/peers/" target="_blank" rel="noreferrer">Open JSON Report</a>
+            </div>
+            <div class="helper-text">Tip: add <code>?validator=&lt;pubkey&gt;</code> to share a prefilled peer analysis URL.</div>
+            <div class="error-banner" id="error-banner"></div>
+        </section>
+
+        <section class="loading-card" id="loading-card">
+            <div class="spinner"></div>
+            Loading peer analysis...
+        </section>
+
+        <section class="app" id="peer-app">
+            <section class="mode-banner" id="mode-banner">-</section>
+
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="eyebrow">Observed Validator Node</div>
+                    <div class="headline small" id="validator-name">-</div>
+                    <div class="subline" id="validator-node">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Analysis Summary</div>
+                    <div class="headline" id="peer-count">-</div>
+                    <div class="subline" id="quality-summary">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Projected Upside</div>
+                    <div class="headline" id="projected-rank">-</div>
+                    <div class="subline" id="projected-score">-</div>
+                </div>
+            </div>
+
+            <section class="panel">
+                <div class="section-head">
+                    <h2>Concentration Findings</h2>
+                </div>
+                <div id="risk-findings" class="finding-list"></div>
+            </section>
+
+            <section class="panel">
+                <div class="section-head">
+                    <h2 id="table-title">Observed Nodes</h2>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Node</th>
+                                <th>Role</th>
+                                <th>Quality</th>
+                                <th>Provider / ASN</th>
+                                <th>Country</th>
+                                <th>Version</th>
+                                <th>Latency</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="node-rows"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div class="recommendation-grid">
+                <section class="panel">
+                    <div class="section-head">
+                        <h2>Peers To Add</h2>
+                    </div>
+                    <div id="add-recommendations" class="recommendation-list"></div>
+                </section>
+
+                <section class="panel">
+                    <div class="section-head">
+                        <h2>Peers To Consider Dropping</h2>
+                    </div>
+                    <div id="drop-recommendations" class="recommendation-list"></div>
+                </section>
+            </div>
+
+            <section class="panel disclaimer-panel">
+                <strong>Scope note:</strong>
+                <span id="disclaimer-text"></span>
+            </section>
+        </section>
+
+        <footer>
+            Peer analysis uses live scoring and topology data only |
+            <a href="/network">Network Map</a> |
+            <a href="/diversity">Diversity Recommender</a> |
+            <a href="/leaderboard">Leaderboard</a>
+        </footer>
+    </div>
+
+    <script src="/static/peers.js"></script>
+</body>
+</html>

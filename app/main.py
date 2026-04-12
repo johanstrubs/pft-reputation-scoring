@@ -16,6 +16,7 @@ from app.diagnostic_ai import generate_ai_diagnostic, AIDiagnosticLimitError, AI
 from app.readiness import build_readiness_report
 from app.upgrades import build_upgrade_report
 from app.diversity import build_diversity_report
+from app.peers import build_peer_report
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -36,6 +37,7 @@ from app.models import (
     ReadinessReportResponse,
     UpgradesResponse,
     DiversityReportResponse,
+    PeerReportResponse,
 )
 
 logging.basicConfig(
@@ -333,6 +335,20 @@ async def get_diversity(public_key: str):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Validator not found") from exc
     return DiversityReportResponse(**report)
+
+
+@app.get("/api/peers/{public_key}", response_model=PeerReportResponse)
+async def get_peers(public_key: str):
+    round_id, _, scores = await db.get_latest_scores()
+    if round_id is None:
+        raise HTTPException(status_code=503, detail="No scoring data available yet")
+    try:
+        report = await build_peer_report(scores, public_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found") from exc
+    return PeerReportResponse(**report)
 
 
 # --- Alerts & Subscriptions ---
@@ -640,6 +656,11 @@ async def upgrades_page():
 @app.get("/diversity")
 async def diversity_page():
     return FileResponse(os.path.join(STATIC_DIR, "diversity.html"))
+
+
+@app.get("/peers")
+async def peers_page():
+    return FileResponse(os.path.join(STATIC_DIR, "peers.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
