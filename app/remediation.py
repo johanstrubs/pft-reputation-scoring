@@ -1,4 +1,5 @@
 import re
+import asyncio
 from collections import defaultdict
 
 from app.diagnostics import build_diagnostic_report
@@ -366,8 +367,11 @@ async def build_remediation_report(db, round_id: int, timestamp: str, scores: li
     source_status = {}
     items: list[dict] = []
 
+    readiness_task = asyncio.create_task(build_readiness_report(round_id, timestamp, scores, public_key))
+    peers_task = asyncio.create_task(build_peer_report(scores, public_key))
+
     try:
-        readiness = await build_readiness_report(round_id, timestamp, scores, public_key)
+        readiness = await readiness_task
         source_status["readiness"] = {
             "timestamp": readiness["timestamp"],
             "status": readiness["overall_status"],
@@ -395,7 +399,7 @@ async def build_remediation_report(db, round_id: int, timestamp: str, scores: li
         source_status["diagnose"] = {"timestamp": timestamp, "status": "unavailable", "json_report_url": None}
 
     try:
-        peers = await build_peer_report(scores, public_key)
+        peers = await peers_task
         source_status["peers"] = {
             "timestamp": timestamp,
             "status": peers["mode"],

@@ -60,6 +60,18 @@ async def _fetch_crawl_for_topology(topology_nodes: list[dict]) -> dict[str, dic
     return results
 
 
+async def _fetch_single_crawl(ip: str | None) -> dict | None:
+    if not ip:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=CRAWL_TIMEOUT, verify=False) as client:
+            response = await client.get(f"https://{ip}:{settings.crawl_peer_port}/crawl")
+            response.raise_for_status()
+        return response.json()
+    except Exception:
+        return None
+
+
 def _normalize_peer_refs(active_peers: list[dict], topology_by_ip: dict[str, dict]) -> tuple[list[str], bool]:
     refs: list[str] = []
     adjacency_present = False
@@ -189,10 +201,9 @@ def _overlap_finding(target_peer_keys: set[str], validator_peer_sets: dict[str, 
     }
 
 
-def _build_node_records(scores: list[ValidatorScore], topology_nodes: list[dict], crawl_results: dict[str, dict]) -> tuple[list[dict], bool]:
+def _build_base_node_records(scores: list[ValidatorScore], topology_nodes: list[dict]) -> list[dict]:
     score_by_key = {score.public_key: score for score in scores}
     score_by_ip = {score.metrics.node_ip: score for score in scores if score.metrics.node_ip}
-    topology_by_ip = {node.get("ip"): node for node in topology_nodes if node.get("ip")}
 
     versions = []
     for score in scores:
@@ -201,37 +212,27 @@ def _build_node_records(scores: list[ValidatorScore], topology_nodes: list[dict]
             versions.append((parsed, _normalize_version(score.metrics.server_version)))
     latest_version = max(versions, key=lambda item: item[0])[1] if versions else None
 
-    adjacency_available = False
     records = []
     for node in topology_nodes:
         ip = node.get("ip")
-        crawl = crawl_results.get(ip or "", {})
-        server = crawl.get("server", {}) if isinstance(crawl, dict) else {}
-        overlay = crawl.get("overlay", {}) if isinstance(crawl, dict) else {}
-        peer_refs, has_adjacency = _normalize_peer_refs(overlay.get("active", []), topology_by_ip)
-        adjacency_available = adjacency_available or has_adjacency
-
-        validator_key = server.get("pubkey_validator")
-        score = score_by_key.get(validator_key) if validator_key else None
-        if score is None and ip:
-            score = score_by_ip.get(ip)
-        validator_key = score.public_key if score else validator_key
+        score = score_by_ip.get(ip) if ip else None
+        validator_key = score.public_key if score else None
 
         record = {
-            "node_public_key": node.get("node_public_key") or server.get("pubkey_node"),
+            "node_public_key": node.get("node_public_key"),
             "validator_public_key": validator_key if validator_key in score_by_key else None,
             "domain": score.domain if score else None,
             "ip": ip,
-            "port": server.get("port") or settings.crawl_peer_port or PEER_PORT_DEFAULT,
+            "port": settings.crawl_peer_port or PEER_PORT_DEFAULT,
             "provider": score.metrics.isp if score else None,
             "asn": score.metrics.asn if score else None,
             "country": (score.metrics.country if score and score.metrics.country else node.get("country_code")),
-            "server_version": score.metrics.server_version if score and score.metrics.server_version else server.get("build_version"),
+            "server_version": score.metrics.server_version if score else None,
             "latency_ms": score.metrics.latency_ms if score and score.metrics.latency_ms is not None else node.get("io_latency_ms"),
             "agreement_24h": score.metrics.agreement_24h if score else None,
             "peer_count": score.metrics.peer_count if score else None,
-            "peer_refs": peer_refs,
-            "has_adjacency": has_adjacency,
+            "peer_refs": [],
+            "has_adjacency": False,
             "non_validating": score is None,
         }
         quality, reason, severity_score = _quality_label(record, latest_version)
@@ -240,7 +241,7 @@ def _build_node_records(scores: list[ValidatorScore], topology_nodes: list[dict]
         record["_quality_score"] = severity_score
         records.append(record)
 
-    return records, adjacency_available
+    return records
 
 
 def _recommend_additions(
@@ -349,8 +350,7 @@ async def build_peer_report(scores: list[ValidatorScore], public_key: str) -> di
     if not topology_nodes:
         raise ValueError("No topology data available yet")
 
-    crawl_results = await _fetch_crawl_for_topology(topology_nodes)
-    node_records, adjacency_available = _build_node_records(scores, topology_nodes, crawl_results)
+    node_records = _build_base_node_records(scores, topology_nodes)
 
     target_candidates = [
         record for record in node_records
@@ -359,6 +359,18 @@ async def build_peer_report(scores: list[ValidatorScore], public_key: str) -> di
     target_node = _pick_target_node(target_candidates, public_key)
 
     node_by_key = {record["node_public_key"]: record for record in node_records if record.get("node_public_key")}
+    topology_by_ip = {node.get("ip"): node for node in topology_nodes if node.get("ip")}
+    adjacency_available = False
+
+    if target_node and target_node.get("ip"):
+        target_crawl = await _fetch_single_crawl(target_node["ip"])
+        if isinstance(target_crawl, dict):
+            overlay = target_crawl.get("overlay", {})
+            peer_refs, has_adjacency = _normalize_peer_refs(overlay.get("active", []), topology_by_ip)
+            target_node["peer_refs"] = [ref for ref in peer_refs if ref in node_by_key]
+            target_node["has_adjacency"] = has_adjacency
+            adjacency_available = has_adjacency
+
     target_has_adjacency = bool(target_node and target_node.get("has_adjacency") and adjacency_available)
     mode = "adjacency" if target_has_adjacency else "candidate_only"
     mode_banner = (
@@ -367,13 +379,19 @@ async def build_peer_report(scores: list[ValidatorScore], public_key: str) -> di
         else "Candidate-only mode: crawl adjacency was unavailable or could not be mapped for this validator, so recommendations are based on observed network nodes."
     )
 
-    validator_peer_sets = {
-        record["validator_public_key"]: {
-            ref for ref in record.get("peer_refs", []) if ref in node_by_key
-        }
-        for record in node_records
-        if record.get("validator_public_key") and record.get("has_adjacency")
-    }
+    validator_peer_sets = {}
+    if mode == "adjacency":
+        crawl_results = await _fetch_crawl_for_topology(topology_nodes)
+        for record in node_records:
+            ip = record.get("ip")
+            crawl = crawl_results.get(ip or "", {})
+            if not isinstance(crawl, dict):
+                continue
+            peer_refs, has_adjacency = _normalize_peer_refs(crawl.get("overlay", {}).get("active", []), topology_by_ip)
+            record["peer_refs"] = [ref for ref in peer_refs if ref in node_by_key]
+            record["has_adjacency"] = has_adjacency
+            if record.get("validator_public_key") and has_adjacency:
+                validator_peer_sets[record["validator_public_key"]] = set(record["peer_refs"])
 
     current_peer_keys = set(ref for ref in (target_node.get("peer_refs") if target_node else []) if ref in node_by_key) if mode == "adjacency" else set()
     peer_records = [node_by_key[key] for key in current_peer_keys if key in node_by_key]

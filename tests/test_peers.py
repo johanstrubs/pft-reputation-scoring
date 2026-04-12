@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import pytest
 
 from app.models import ValidatorMetrics, ValidatorScore, ValidatorSubScores
@@ -76,6 +78,7 @@ async def test_peer_report_uses_adjacency_mode(monkeypatch):
 
     monkeypatch.setattr("app.peers._fetch_topology_nodes", fake_topology)
     monkeypatch.setattr("app.peers._fetch_crawl_for_topology", fake_crawl)
+    monkeypatch.setattr("app.peers._fetch_single_crawl", AsyncMock(return_value=(await fake_crawl([]))["10.0.0.1"]))
 
     report = await build_peer_report(scores, "nHTarget")
 
@@ -107,6 +110,7 @@ async def test_peer_report_falls_back_to_candidate_only(monkeypatch):
 
     monkeypatch.setattr("app.peers._fetch_topology_nodes", fake_topology)
     monkeypatch.setattr("app.peers._fetch_crawl_for_topology", fake_crawl)
+    monkeypatch.setattr("app.peers._fetch_single_crawl", AsyncMock(return_value=None))
 
     report = await build_peer_report(scores, "nHTarget")
 
