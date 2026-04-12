@@ -338,7 +338,7 @@ def _recommend_drops(peer_records: list[dict], dominant_provider: str | None, do
     return [{key: value for key, value in candidate.items() if not key.startswith("_")} for candidate in recommendations[:3]]
 
 
-async def build_peer_report(scores: list[ValidatorScore], public_key: str) -> dict:
+async def build_peer_report(scores: list[ValidatorScore], public_key: str, *, allow_adjacency_probe: bool = True) -> dict:
     if not scores:
         raise ValueError("No scoring data available yet")
 
@@ -362,7 +362,7 @@ async def build_peer_report(scores: list[ValidatorScore], public_key: str) -> di
     topology_by_ip = {node.get("ip"): node for node in topology_nodes if node.get("ip")}
     adjacency_available = False
 
-    if target_node and target_node.get("ip"):
+    if allow_adjacency_probe and target_node and target_node.get("ip"):
         target_crawl = await _fetch_single_crawl(target_node["ip"])
         if isinstance(target_crawl, dict):
             overlay = target_crawl.get("overlay", {})
@@ -380,7 +380,7 @@ async def build_peer_report(scores: list[ValidatorScore], public_key: str) -> di
     )
 
     validator_peer_sets = {}
-    if mode == "adjacency":
+    if mode == "adjacency" and allow_adjacency_probe:
         crawl_results = await _fetch_crawl_for_topology(topology_nodes)
         for record in node_records:
             ip = record.get("ip")

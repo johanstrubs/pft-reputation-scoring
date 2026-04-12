@@ -368,7 +368,7 @@ async def build_remediation_report(db, round_id: int, timestamp: str, scores: li
     items: list[dict] = []
 
     readiness_task = asyncio.create_task(build_readiness_report(round_id, timestamp, scores, public_key))
-    peers_task = asyncio.create_task(build_peer_report(scores, public_key))
+    peers_task = asyncio.create_task(build_peer_report(scores, public_key, allow_adjacency_probe=False))
 
     try:
         readiness = await readiness_task
