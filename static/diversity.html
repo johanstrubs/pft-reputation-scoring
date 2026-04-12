@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Diversity Recommender</title>
+    <link rel="stylesheet" href="/static/diversity.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="/leaderboard">Leaderboard</a>
+            <a href="/network">Network Map</a>
+            <a href="/simulator">Score Simulator</a>
+            <a href="/readiness">Readiness Checker</a>
+        </nav>
+
+        <section class="hero">
+            <h1>Validator Diversity Recommender</h1>
+            <p>See how your current provider, ASN, and country affect network concentration, then simulate how a move to another observed bundle would change your diversity outcomes.</p>
+        </section>
+
+        <section class="lookup-card">
+            <label class="lookup-label" for="validator-key">Validator Public Key</label>
+            <div class="lookup-row">
+                <input id="validator-key" type="text" placeholder="Paste an nH... validator public key">
+                <button id="load-button" class="primary-button">Analyze Diversity</button>
+            </div>
+            <div class="button-row">
+                <button id="share-button" class="secondary-button" type="button">Copy Share Link</button>
+                <a id="json-link" class="secondary-link" href="/api/diversity/" target="_blank" rel="noreferrer">Open JSON Report</a>
+            </div>
+            <div class="helper-text">Tip: add <code>?validator=&lt;pubkey&gt;</code> to share a prefilled diversity URL.</div>
+            <div class="error-banner" id="error-banner"></div>
+        </section>
+
+        <section class="loading-card" id="loading-card">
+            <div class="spinner"></div>
+            Loading diversity analysis...
+        </section>
+
+        <section class="app" id="diversity-app">
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="eyebrow">Validator</div>
+                    <div class="headline" id="validator-name">-</div>
+                    <div class="subline" id="validator-key-text">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Current Diversity Score</div>
+                    <div class="headline" id="diversity-score">-</div>
+                    <div class="subline" id="rank-text">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="eyebrow">Current Bundle</div>
+                    <div class="headline bundle-headline" id="bundle-label">-</div>
+                    <div class="subline" id="health-message">-</div>
+                </div>
+            </div>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Current Concentration Context</h2>
+                    <div class="panel-note">Provider, ASN, country, and bundle views from the live cohort</div>
+                </div>
+                <div id="grouping-grid" class="grouping-grid"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Top 5 Concentrated Bundles</h2>
+                    <div class="panel-note">Observed bundle concentration across mapped validators</div>
+                </div>
+                <div id="concentration-list" class="bundle-list"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Top 3 Migration Recommendations</h2>
+                    <div class="panel-note">Best diversity gains that do not create a new bundle hotspot</div>
+                </div>
+                <div id="clean-bill" class="clean-bill"></div>
+                <div id="recommendations-list" class="recommendation-list"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Migration Simulator</h2>
+                    <div class="panel-note">Projected changes hold all non-diversity metrics fixed</div>
+                </div>
+                <div class="simulator-controls">
+                    <label class="lookup-label" for="bundle-select">Target Bundle</label>
+                    <select id="bundle-select"></select>
+                </div>
+                <div id="simulator-output" class="simulator-output"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Disclaimer</h2>
+                </div>
+                <div id="disclaimer" class="disclaimer"></div>
+            </section>
+        </section>
+    </div>
+
+    <script src="/static/diversity.js"></script>
+</body>
+</html>

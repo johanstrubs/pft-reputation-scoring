@@ -15,6 +15,7 @@ from app.collector import DataCollector
 from app.diagnostic_ai import generate_ai_diagnostic, AIDiagnosticLimitError, AIDiagnosticUnavailableError
 from app.readiness import build_readiness_report
 from app.upgrades import build_upgrade_report
+from app.diversity import build_diversity_report
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -34,6 +35,7 @@ from app.models import (
     AIDiagnosticResponse,
     ReadinessReportResponse,
     UpgradesResponse,
+    DiversityReportResponse,
 )
 
 logging.basicConfig(
@@ -317,6 +319,20 @@ async def get_upgrades():
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return UpgradesResponse(**report)
+
+
+@app.get("/api/diversity/{public_key}", response_model=DiversityReportResponse)
+async def get_diversity(public_key: str):
+    round_id, _, scores = await db.get_latest_scores()
+    if round_id is None:
+        raise HTTPException(status_code=503, detail="No scoring data available yet")
+    try:
+        report = build_diversity_report(scores, public_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found") from exc
+    return DiversityReportResponse(**report)
 
 
 # --- Alerts & Subscriptions ---
@@ -619,6 +635,11 @@ async def readiness_page():
 @app.get("/upgrades")
 async def upgrades_page():
     return FileResponse(os.path.join(STATIC_DIR, "upgrades.html"))
+
+
+@app.get("/diversity")
+async def diversity_page():
+    return FileResponse(os.path.join(STATIC_DIR, "diversity.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

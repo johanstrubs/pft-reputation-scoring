@@ -140,6 +140,15 @@ async def test_upgrades_page():
 
 
 @pytest.mark.anyio
+async def test_diversity_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/diversity")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_network_topology_includes_version_and_strict_enrichment(mock_scores):
     partial = ValidatorScore(
         public_key="nHPartial",
@@ -507,3 +516,73 @@ async def test_upgrades_endpoint_success(mock_scores):
     assert data["latest_version"] == "2.4.0"
     assert data["version_distribution"][0]["version"] == "2.4.0"
     assert data["lagging_validators"][0]["days_behind"] == 2
+
+
+@pytest.mark.anyio
+async def test_diversity_endpoint_success(mock_scores):
+    transport = ASGITransport(app=app)
+    payload = {
+        "current_context": {
+            "public_key": "nHTest1",
+            "domain": "test1.example.com",
+            "provider": "Hetzner",
+            "asn": 24940,
+            "country": "DE",
+            "bundle_label": "Hetzner / AS24940 / DE",
+            "diversity_score": 0.22,
+            "composite_score": 85.5,
+            "rank": 1,
+            "validator_count": 2,
+            "provider_group": {"value": "Hetzner", "shared_count": 2, "concentration_pct": 50.0, "above_threshold": True, "threshold_over_pct": 17.0},
+            "asn_group": {"value": "AS24940", "shared_count": 2, "concentration_pct": 50.0, "above_threshold": True, "threshold_over_pct": 17.0},
+            "country_group": {"value": "DE", "shared_count": 2, "concentration_pct": 50.0, "above_threshold": True, "threshold_over_pct": 17.0},
+            "bundle_group": {"value": "Hetzner / AS24940 / DE", "shared_count": 2, "concentration_pct": 50.0, "above_threshold": True, "threshold_over_pct": 17.0},
+            "clean_bill_of_health": False,
+        },
+        "concentration_summary": [
+            {"bundle": {"provider": "Hetzner", "asn": 24940, "country": "DE", "label": "Hetzner / AS24940 / DE", "source": "observed"}, "validator_count": 2, "concentration_pct": 50.0}
+        ],
+        "available_target_bundles": [
+            {
+                "target_bundle": {"provider": "OVHcloud", "asn": 16276, "country": "FR", "label": "OVHcloud / AS16276 / FR", "source": "preset"},
+                "projected_diversity_score": 0.83,
+                "diversity_score_delta": 0.61,
+                "projected_composite_score": 91.6,
+                "composite_score_delta": 6.1,
+                "projected_rank": 1,
+                "rank_delta": 0,
+                "source_bundle_pct_before": 50.0,
+                "source_bundle_pct_after": 0.0,
+                "target_bundle_pct_before": 0.0,
+                "target_bundle_pct_after": 25.0,
+                "target_bundle_would_exceed_threshold": False,
+            }
+        ],
+        "recommendations": [
+            {
+                "target_bundle": {"provider": "OVHcloud", "asn": 16276, "country": "FR", "label": "OVHcloud / AS16276 / FR", "source": "preset"},
+                "projected_diversity_score": 0.83,
+                "diversity_score_delta": 0.61,
+                "projected_composite_score": 91.6,
+                "composite_score_delta": 6.1,
+                "projected_rank": 1,
+                "rank_delta": 0,
+                "source_bundle_pct_before": 50.0,
+                "source_bundle_pct_after": 0.0,
+                "target_bundle_pct_before": 0.0,
+                "target_bundle_pct_after": 25.0,
+                "target_bundle_would_exceed_threshold": False,
+            }
+        ],
+        "disclaimer": "Diversity only",
+        "json_report_url": "/api/diversity/nHTest1",
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        from app.main import db
+        with patch.object(db, "get_latest_scores", new_callable=AsyncMock, return_value=(9, "2026-04-12T12:00:00+00:00", mock_scores)), \
+             patch("app.main.build_diversity_report", return_value=payload):
+            resp = await client.get("/api/diversity/nHTest1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["current_context"]["provider"] == "Hetzner"
+    assert data["recommendations"][0]["target_bundle"]["provider"] == "OVHcloud"

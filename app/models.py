@@ -234,3 +234,67 @@ class UpgradesResponse(BaseModel):
     lagging_validators: list[LaggingValidatorResponse]
     adoption_history: list[UpgradeHistoryEntryResponse]
     json_report_url: str
+
+
+class DiversityGroupingResponse(BaseModel):
+    value: str
+    shared_count: int
+    concentration_pct: float
+    above_threshold: bool
+    threshold_over_pct: float
+
+
+class DiversityBundleResponse(BaseModel):
+    provider: str
+    asn: int
+    country: str
+    label: str
+    source: str
+
+
+class DiversityProjectionResponse(BaseModel):
+    target_bundle: DiversityBundleResponse
+    projected_diversity_score: float
+    diversity_score_delta: float
+    projected_composite_score: float
+    composite_score_delta: float
+    projected_rank: int
+    rank_delta: int
+    source_bundle_pct_before: float
+    source_bundle_pct_after: float
+    target_bundle_pct_before: float
+    target_bundle_pct_after: float
+    target_bundle_would_exceed_threshold: bool
+
+
+class DiversityCurrentContextResponse(BaseModel):
+    public_key: str
+    domain: str | None = None
+    provider: str | None = None
+    asn: int | None = None
+    country: str | None = None
+    bundle_label: str
+    diversity_score: float
+    composite_score: float
+    rank: int
+    validator_count: int
+    provider_group: DiversityGroupingResponse | None = None
+    asn_group: DiversityGroupingResponse | None = None
+    country_group: DiversityGroupingResponse | None = None
+    bundle_group: DiversityGroupingResponse | None = None
+    clean_bill_of_health: bool
+
+
+class DiversityConcentrationEntryResponse(BaseModel):
+    bundle: DiversityBundleResponse
+    validator_count: int
+    concentration_pct: float
+
+
+class DiversityReportResponse(BaseModel):
+    current_context: DiversityCurrentContextResponse
+    concentration_summary: list[DiversityConcentrationEntryResponse]
+    available_target_bundles: list[DiversityProjectionResponse]
+    recommendations: list[DiversityProjectionResponse]
+    disclaimer: str
+    json_report_url: str
