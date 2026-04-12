@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Incident Runbooks</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0b1220;
+            --panel: #121b2e;
+            --text: #e6edf7;
+            --muted: #9db0cc;
+            --line: #253553;
+            --accent: #61a8ff;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Avenir Next", "Segoe UI", sans-serif; background: radial-gradient(circle at top, #1a2742, var(--bg) 45%); color: var(--text); }
+        .container { max-width: 1180px; margin: 0 auto; padding: 32px 20px 56px; }
+        .hero, .card { background: rgba(18, 27, 46, 0.92); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.22); }
+        .hero { padding: 28px; margin-bottom: 20px; }
+        .links { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
+        a { color: var(--accent); text-decoration: none; }
+        .grid { display: grid; gap: 14px; }
+        .card { padding: 20px; }
+        .muted { color: var(--muted); }
+        ol, ul { margin: 10px 0 0 20px; }
+        pre { margin: 8px 0 0; padding: 10px; background: #0b1220; border: 1px solid var(--line); border-radius: 14px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <section class="hero">
+            <h1>Incident Runbook Library</h1>
+            <p class="muted">Public troubleshooting reference for suspected incident causes and their first-line remediation steps.</p>
+            <div class="links">
+                <a href="/incidents">Incident Timeline</a>
+                <a href="/diagnose">Diagnostics</a>
+                <a href="/api/runbooks">Runbook JSON</a>
+            </div>
+        </section>
+        <div id="runbook-list" class="grid"></div>
+    </div>
+
+    <script>
+        async function loadRunbooks() {
+            const resp = await fetch('/api/runbooks');
+            const data = await resp.json();
+            const list = document.getElementById('runbook-list');
+            list.innerHTML = (data.runbooks || []).map((runbook) => `
+                <article class="card">
+                    <h2>${runbook.title}</h2>
+                    <p class="muted">${runbook.description}</p>
+                    <p><strong>Check first:</strong> ${runbook.check_first}</p>
+                    <p><strong>Typical patterns</strong></p>
+                    <ul>${runbook.typical_patterns.map((item) => `<li>${item}</li>`).join('')}</ul>
+                    <p><strong>Remediation steps</strong></p>
+                    <ol>${runbook.steps.map((step) => `<li><strong>${step.title}</strong><pre>${step.command}</pre></li>`).join('')}</ol>
+                    <p><strong>When to escalate:</strong> ${runbook.escalation_note}</p>
+                </article>
+            `).join('');
+        }
+        loadRunbooks();
+    </script>
+</body>
+</html>

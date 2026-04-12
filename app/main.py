@@ -23,6 +23,7 @@ from app.database import Database
 from app.diagnostics import build_diagnostic_report
 from app.digest import generate_and_store_weekly_digest
 from app.incidents import inject_synthetic_incident
+from app.runbooks import classify_incident, get_runbook_library
 from app.scheduler import start_scheduler
 from app.models import (
     ScoresResponse,
@@ -33,6 +34,7 @@ from app.models import (
     WeeklyDigestHistoryResponse,
     IncidentResponse,
     IncidentListResponse,
+    RunbookLibraryResponse,
     DiagnosticReportResponse,
     AIDiagnosticResponse,
     ReadinessReportResponse,
@@ -203,6 +205,20 @@ class IncidentTestRequest(BaseModel):
     validator_key: str
 
 
+async def _attach_incident_rca(incident: dict) -> dict:
+    incident["events"] = await db.get_incident_events(incident["id"])
+    round_scores = await db.get_scores_for_round(incident["latest_round_id"]) if incident.get("latest_round_id") else []
+    _latest_round_id, _latest_round_ts, latest_scores = await db.get_latest_scores()
+    related_incidents = await db.get_incidents(validator_key=incident["validator_key"], limit=100)
+    incident["rca"] = classify_incident(
+        incident,
+        related_incidents=related_incidents,
+        round_scores=round_scores,
+        latest_scores=latest_scores,
+    )
+    return incident
+
+
 @app.get("/api/incidents", response_model=IncidentListResponse)
 async def get_incidents(
     validator_key: str | None = None,
@@ -230,7 +246,7 @@ async def get_incident(incident_id: int):
     incident = await db.get_incident(incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
-    incident["events"] = await db.get_incident_events(incident_id)
+    incident = await _attach_incident_rca(incident)
     return IncidentResponse(**incident)
 
 
@@ -239,8 +255,14 @@ async def create_synthetic_incident(req: IncidentTestRequest):
     if not req.validator_key or len(req.validator_key) < 10:
         raise HTTPException(status_code=400, detail="Invalid validator key")
     incident = await inject_synthetic_incident(db, req.validator_key)
-    incident["events"] = await db.get_incident_events(incident["id"])
+    incident = await _attach_incident_rca(incident)
     return IncidentResponse(**incident)
+
+
+@app.get("/api/runbooks", response_model=RunbookLibraryResponse)
+async def get_runbooks():
+    library = get_runbook_library()
+    return RunbookLibraryResponse(runbooks=list(library.values()))
 
 
 @app.get("/api/diagnose/{public_key}", response_model=DiagnosticReportResponse)
@@ -652,6 +674,11 @@ async def simulator():
 @app.get("/incidents")
 async def incidents_page():
     return FileResponse(os.path.join(STATIC_DIR, "incidents.html"))
+
+
+@app.get("/runbooks")
+async def runbooks_page():
+    return FileResponse(os.path.join(STATIC_DIR, "runbooks.html"))
 
 
 @app.get("/diagnose")

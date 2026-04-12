@@ -113,6 +113,15 @@ async def test_incidents_page():
 
 
 @pytest.mark.anyio
+async def test_runbooks_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/runbooks")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_diagnose_page():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -322,10 +331,12 @@ async def test_incident_detail_and_synthetic_endpoint():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         from app.main import db
         with patch.object(db, "get_incident", new_callable=AsyncMock, return_value=incident), \
-             patch.object(db, "get_incident_events", new_callable=AsyncMock, return_value=events):
+             patch.object(db, "get_incident_events", new_callable=AsyncMock, return_value=events), \
+             patch("app.main._attach_incident_rca", new=AsyncMock(return_value={**incident, "events": events, "rca": None})):
             detail_resp = await client.get("/api/incidents/9")
         with patch("app.main.inject_synthetic_incident", new_callable=AsyncMock, return_value=incident), \
-             patch.object(db, "get_incident_events", new_callable=AsyncMock, return_value=events):
+             patch.object(db, "get_incident_events", new_callable=AsyncMock, return_value=events), \
+             patch("app.main._attach_incident_rca", new=AsyncMock(return_value={**incident, "events": events, "rca": None})):
             synthetic_resp = await client.post("/api/incidents/test", json={"validator_key": "nHSynthetic1"})
 
     assert detail_resp.status_code == 200
@@ -688,6 +699,63 @@ async def test_peers_endpoint_success(mock_scores):
     data = resp.json()
     assert data["mode"] == "candidate_only"
     assert data["add_recommendations"][0]["provider"] == "Vultr"
+
+
+@pytest.mark.anyio
+async def test_incident_detail_includes_rca():
+    transport = ASGITransport(app=app)
+    incident_payload = {
+        "id": 9,
+        "validator_key": "nHTest1",
+        "severity": "warning",
+        "status": "open",
+        "synthetic": False,
+        "correlated": False,
+        "summary": "Peer count collapse",
+        "start_time": "2026-04-12T12:00:00+00:00",
+        "end_time": None,
+        "duration_seconds": None,
+        "event_types": ["peer_collapse"],
+        "active_event_types": ["peer_collapse"],
+        "latest_round_id": 12,
+        "latest_event_time": "2026-04-12T12:00:00+00:00",
+        "before_values": {"peer_count": 8},
+        "during_values": {"peer_count": 2},
+        "after_values": None,
+        "events": [],
+        "rca": {
+            "suspected_cause": "peer_collapse",
+            "confidence": "high",
+            "evidence": ["incident event_types include peer_collapse", "during.peer_count=2"],
+            "runbook": {
+                "cause_label": "peer_collapse",
+                "title": "Peer Collapse",
+                "description": "The validator lost too many peers.",
+                "typical_patterns": ["peer_count drops below healthy threshold"],
+                "check_first": "Check port reachability.",
+                "steps": [{"title": "Check listener state", "command": "ss -ltnp | grep 2559"}],
+                "escalation_note": "Escalate if it persists.",
+            },
+        },
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.db.get_incident", new=AsyncMock(return_value=incident_payload)), \
+             patch("app.main._attach_incident_rca", new=AsyncMock(return_value=incident_payload)):
+            resp = await client.get("/api/incidents/9")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["rca"]["suspected_cause"] == "peer_collapse"
+    assert data["rca"]["runbook"]["title"] == "Peer Collapse"
+
+
+@pytest.mark.anyio
+async def test_runbooks_endpoint():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/runbooks")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert any(runbook["cause_label"] == "peer_collapse" for runbook in data["runbooks"])
 
 
 @pytest.mark.anyio

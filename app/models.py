@@ -117,6 +117,28 @@ class IncidentEventResponse(BaseModel):
     previous_values: dict | None = None
 
 
+class RunbookStepResponse(BaseModel):
+    title: str
+    command: str
+
+
+class IncidentRunbookResponse(BaseModel):
+    cause_label: str
+    title: str
+    description: str
+    typical_patterns: list[str]
+    check_first: str
+    steps: list[RunbookStepResponse]
+    escalation_note: str
+
+
+class IncidentRCAResponse(BaseModel):
+    suspected_cause: str
+    confidence: str
+    evidence: list[str]
+    runbook: IncidentRunbookResponse
+
+
 class IncidentResponse(BaseModel):
     id: int
     validator_key: str
@@ -136,10 +158,19 @@ class IncidentResponse(BaseModel):
     during_values: dict | None = None
     after_values: dict | None = None
     events: list[IncidentEventResponse] | None = None
+    rca: IncidentRCAResponse | None = None
 
 
 class IncidentListResponse(BaseModel):
     incidents: list[IncidentResponse]
+
+
+class RunbookLibraryEntryResponse(IncidentRunbookResponse):
+    pass
+
+
+class RunbookLibraryResponse(BaseModel):
+    runbooks: list[RunbookLibraryEntryResponse]
 
 
 class DiagnosticFindingResponse(BaseModel):

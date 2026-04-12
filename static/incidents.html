@@ -165,6 +165,12 @@
             padding: 12px;
             background: rgba(255,255,255,0.02);
         }
+        .rca-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin: 16px 0;
+        }
         .healthy {
             padding: 28px;
             text-align: center;
@@ -185,6 +191,7 @@
                 <a href="/leaderboard">Leaderboard</a>
                 <a href="/api/incidents" id="json-feed-link">Live JSON Feed</a>
                 <a href="/api/incidents?status=open">Open Incidents</a>
+                <a href="/runbooks">Runbook Library</a>
             </div>
         </section>
 
@@ -358,6 +365,33 @@
                         const resp = await fetch(`/api/incidents/${incidentId}`);
                         const incident = await resp.json();
                         details.innerHTML = `
+                            <div class="hero-links" style="margin-bottom:12px">
+                                <a href="/api/incidents/${incident.id}" target="_blank" rel="noreferrer">Open incident JSON</a>
+                                <a href="/runbooks" target="_blank" rel="noreferrer">Open runbook library</a>
+                            </div>
+                            ${incident.rca ? `
+                                <div class="rca-grid">
+                                    <div class="event-item">
+                                        <h3>Suspected Cause</h3>
+                                        <div><strong>${escapeHtml(incident.rca.suspected_cause)}</strong></div>
+                                        <div class="subtle">Confidence: ${escapeHtml(incident.rca.confidence)}</div>
+                                    </div>
+                                    <div class="event-item">
+                                        <h3>Evidence</h3>
+                                        <ul>${(incident.rca.evidence || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+                                    </div>
+                                </div>
+                                <div class="event-item" style="margin-bottom:14px">
+                                    <h3>${escapeHtml(incident.rca.runbook.title)}</h3>
+                                    <div class="subtle">${escapeHtml(incident.rca.runbook.description)}</div>
+                                    <p><strong>Check first:</strong> ${escapeHtml(incident.rca.runbook.check_first)}</p>
+                                    <p><strong>Typical patterns</strong></p>
+                                    <ul>${incident.rca.runbook.typical_patterns.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+                                    <p><strong>Runbook steps</strong></p>
+                                    <ol>${incident.rca.runbook.steps.map((step) => `<li><strong>${escapeHtml(step.title)}</strong><pre>${escapeHtml(step.command)}</pre></li>`).join('')}</ol>
+                                    <p><strong>When to escalate:</strong> ${escapeHtml(incident.rca.runbook.escalation_note)}</p>
+                                </div>
+                            ` : ''}
                             <div class="context-grid">
                                 <div><h3>Before</h3><pre>${escapeHtml(JSON.stringify(incident.before_values, null, 2))}</pre></div>
                                 <div><h3>During</h3><pre>${escapeHtml(JSON.stringify(incident.during_values, null, 2))}</pre></div>
@@ -379,6 +413,13 @@
                     button.textContent = 'Hide details';
                 });
             });
+
+            const params = new URLSearchParams(window.location.search);
+            const preselectIncident = params.get('incident');
+            if (preselectIncident) {
+                const target = document.querySelector(`[data-open-incident="${preselectIncident}"]`);
+                if (target) target.click();
+            }
         }
 
         els.apply.addEventListener('click', loadIncidents);
