@@ -306,119 +306,167 @@
                 .replaceAll('>', '&gt;');
         }
 
-        async function loadIncidents() {
-            els.loading.hidden = false;
-            els.healthy.hidden = true;
-            els.list.innerHTML = '';
-            const params = getParams();
-            const url = `/api/incidents${params.toString() ? `?${params.toString()}` : ''}`;
-            els.jsonFeedLink.href = url;
-            const resp = await fetch(url);
-            const data = await resp.json();
-            const incidents = data.incidents || [];
-            els.lastChecked.textContent = `Last checked: ${new Date().toLocaleString()}`;
-            els.resultSummary.textContent = `${incidents.length} incident${incidents.length === 1 ? '' : 's'} loaded`;
+        function renderPageError(message) {
             els.loading.hidden = true;
+            els.healthy.hidden = true;
+            els.resultSummary.textContent = 'Unable to load incidents';
+            els.list.innerHTML = `
+                <article class="card">
+                    <div class="event-item">
+                        <strong>Incident feed unavailable</strong>
+                        <div class="subtle">${escapeHtml(message)}</div>
+                    </div>
+                </article>
+            `;
+        }
 
-            if (!incidents.length) {
-                els.healthy.hidden = false;
-                els.healthyTimestamp.textContent = `Last checked ${new Date().toLocaleString()}`;
+        async function openIncidentDetail(incidentId, button) {
+            const details = document.getElementById(`incident-details-${incidentId}`);
+            const open = details.classList.contains('open');
+            if (open) {
+                details.classList.remove('open');
+                button.textContent = 'Show details';
                 return;
             }
 
-            incidents.forEach((incident) => {
-                const article = document.createElement('article');
-                article.className = 'card';
-                article.innerHTML = `
-                    <div class="card-header">
-                        <div>
-                            <h2>${escapeHtml(incident.summary)}</h2>
-                            <div class="subtle">${escapeHtml(incident.validator_key)} • ${fmtDate(incident.start_time)} to ${fmtDate(incident.end_time)}</div>
+            if (!details.dataset.loaded) {
+                details.innerHTML = '<div class="loading">Loading incident detail...</div>';
+                try {
+                    const resp = await fetch(`/api/incidents/${incidentId}`);
+                    if (!resp.ok) {
+                        throw new Error(`Incident detail returned HTTP ${resp.status}`);
+                    }
+                    const incident = await resp.json();
+                    const allEvents = incident.events || [];
+                    const maxRenderedEvents = 100;
+                    const displayedEvents = allEvents.slice(-maxRenderedEvents);
+                    const omittedEvents = Math.max(0, allEvents.length - displayedEvents.length);
+                    details.innerHTML = `
+                        <div class="hero-links" style="margin-bottom:12px">
+                            <a href="/api/incidents/${incident.id}" target="_blank" rel="noreferrer">Open incident JSON</a>
+                            <a href="/runbooks" target="_blank" rel="noreferrer">Open runbook library</a>
                         </div>
-                        <div class="subtle">Duration: ${fmtDuration(incident.duration_seconds)}</div>
-                    </div>
-                    <div class="chip-row">
-                        <span class="chip ${incident.severity}">${escapeHtml(incident.severity)}</span>
-                        <span class="chip">${escapeHtml(incident.status)}</span>
-                        <span class="chip">${incident.synthetic ? 'synthetic' : 'detected'}</span>
-                        <span class="chip">${incident.correlated ? 'correlated round' : 'isolated'}</span>
-                        ${incident.event_types.map((type) => `<span class="chip">${escapeHtml(type)}</span>`).join('')}
-                    </div>
-                    <button class="ghost" data-open-incident="${incident.id}">Show details</button>
-                    <div class="details" id="incident-details-${incident.id}"></div>
-                `;
-                els.list.appendChild(article);
-            });
+                        ${incident.rca ? `
+                            <div class="rca-grid">
+                                <div class="event-item">
+                                    <h3>Suspected Cause</h3>
+                                    <div><strong>${escapeHtml(incident.rca.suspected_cause)}</strong></div>
+                                    <div class="subtle">Confidence: ${escapeHtml(incident.rca.confidence)}</div>
+                                </div>
+                                <div class="event-item">
+                                    <h3>Evidence</h3>
+                                    <ul>${(incident.rca.evidence || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+                                </div>
+                            </div>
+                            <div class="event-item" style="margin-bottom:14px">
+                                <h3>${escapeHtml(incident.rca.runbook.title)}</h3>
+                                <div class="subtle">${escapeHtml(incident.rca.runbook.description)}</div>
+                                <p><strong>Check first:</strong> ${escapeHtml(incident.rca.runbook.check_first)}</p>
+                                <p><strong>Typical patterns</strong></p>
+                                <ul>${incident.rca.runbook.typical_patterns.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+                                <p><strong>Runbook steps</strong></p>
+                                <ol>${incident.rca.runbook.steps.map((step) => `<li><strong>${escapeHtml(step.title)}</strong><pre>${escapeHtml(step.command)}</pre></li>`).join('')}</ol>
+                                <p><strong>When to escalate:</strong> ${escapeHtml(incident.rca.runbook.escalation_note)}</p>
+                            </div>
+                        ` : ''}
+                        <div class="context-grid">
+                            <div><h3>Before</h3><pre>${escapeHtml(JSON.stringify(incident.before_values, null, 2))}</pre></div>
+                            <div><h3>During</h3><pre>${escapeHtml(JSON.stringify(incident.during_values, null, 2))}</pre></div>
+                            <div><h3>After</h3><pre>${escapeHtml(JSON.stringify(incident.after_values, null, 2))}</pre></div>
+                        </div>
+                        <div class="event-list">
+                            ${omittedEvents ? `<div class="event-item"><strong>Showing the most recent ${displayedEvents.length} events</strong><div class="subtle">${omittedEvents} earlier event${omittedEvents === 1 ? '' : 's'} omitted from the page for faster loading. Use the JSON link above for the full event history.</div></div>` : ''}
+                            ${displayedEvents.map((event) => `
+                                <div class="event-item">
+                                    <strong>${escapeHtml(event.event_type)}</strong> • ${escapeHtml(event.event_phase)} • ${fmtDate(event.created_at)}
+                                    <div class="subtle">Severity: ${escapeHtml(event.severity)}</div>
+                                    <pre>${escapeHtml(JSON.stringify({ current: event.current_values, previous: event.previous_values }, null, 2))}</pre>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    details.dataset.loaded = 'true';
+                } catch (error) {
+                    details.innerHTML = `
+                        <div class="event-item">
+                            <strong>Unable to load incident detail</strong>
+                            <div class="subtle">${escapeHtml(error.message || 'Unknown error')}</div>
+                        </div>
+                    `;
+                    details.dataset.loaded = '';
+                }
+            }
 
-            document.querySelectorAll('[data-open-incident]').forEach((button) => {
-                button.addEventListener('click', async () => {
-                    const incidentId = button.dataset.openIncident;
-                    const details = document.getElementById(`incident-details-${incidentId}`);
-                    const open = details.classList.contains('open');
-                    if (open) {
-                        details.classList.remove('open');
-                        button.textContent = 'Show details';
-                        return;
-                    }
-                    if (!details.dataset.loaded) {
-                        details.innerHTML = '<div class="loading">Loading incident detail...</div>';
-                        const resp = await fetch(`/api/incidents/${incidentId}`);
-                        const incident = await resp.json();
-                        details.innerHTML = `
-                            <div class="hero-links" style="margin-bottom:12px">
-                                <a href="/api/incidents/${incident.id}" target="_blank" rel="noreferrer">Open incident JSON</a>
-                                <a href="/runbooks" target="_blank" rel="noreferrer">Open runbook library</a>
+            details.classList.add('open');
+            button.textContent = 'Hide details';
+        }
+
+        async function loadIncidents() {
+            try {
+                els.loading.hidden = false;
+                els.healthy.hidden = true;
+                els.list.innerHTML = '';
+                const params = getParams();
+                const url = `/api/incidents${params.toString() ? `?${params.toString()}` : ''}`;
+                els.jsonFeedLink.href = url;
+                const resp = await fetch(url);
+                if (!resp.ok) {
+                    throw new Error(`Incident feed returned HTTP ${resp.status}`);
+                }
+                const data = await resp.json();
+                const incidents = data.incidents || [];
+                els.lastChecked.textContent = `Last checked: ${new Date().toLocaleString()}`;
+                els.resultSummary.textContent = `${incidents.length} incident${incidents.length === 1 ? '' : 's'} loaded`;
+                els.loading.hidden = true;
+
+                if (!incidents.length) {
+                    els.healthy.hidden = false;
+                    els.healthyTimestamp.textContent = `Last checked ${new Date().toLocaleString()}`;
+                    return;
+                }
+
+                incidents.forEach((incident) => {
+                    const article = document.createElement('article');
+                    article.className = 'card';
+                    article.innerHTML = `
+                        <div class="card-header">
+                            <div>
+                                <h2>${escapeHtml(incident.summary)}</h2>
+                                <div class="subtle">${escapeHtml(incident.validator_key)} • ${fmtDate(incident.start_time)} to ${fmtDate(incident.end_time)}</div>
                             </div>
-                            ${incident.rca ? `
-                                <div class="rca-grid">
-                                    <div class="event-item">
-                                        <h3>Suspected Cause</h3>
-                                        <div><strong>${escapeHtml(incident.rca.suspected_cause)}</strong></div>
-                                        <div class="subtle">Confidence: ${escapeHtml(incident.rca.confidence)}</div>
-                                    </div>
-                                    <div class="event-item">
-                                        <h3>Evidence</h3>
-                                        <ul>${(incident.rca.evidence || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
-                                    </div>
-                                </div>
-                                <div class="event-item" style="margin-bottom:14px">
-                                    <h3>${escapeHtml(incident.rca.runbook.title)}</h3>
-                                    <div class="subtle">${escapeHtml(incident.rca.runbook.description)}</div>
-                                    <p><strong>Check first:</strong> ${escapeHtml(incident.rca.runbook.check_first)}</p>
-                                    <p><strong>Typical patterns</strong></p>
-                                    <ul>${incident.rca.runbook.typical_patterns.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
-                                    <p><strong>Runbook steps</strong></p>
-                                    <ol>${incident.rca.runbook.steps.map((step) => `<li><strong>${escapeHtml(step.title)}</strong><pre>${escapeHtml(step.command)}</pre></li>`).join('')}</ol>
-                                    <p><strong>When to escalate:</strong> ${escapeHtml(incident.rca.runbook.escalation_note)}</p>
-                                </div>
-                            ` : ''}
-                            <div class="context-grid">
-                                <div><h3>Before</h3><pre>${escapeHtml(JSON.stringify(incident.before_values, null, 2))}</pre></div>
-                                <div><h3>During</h3><pre>${escapeHtml(JSON.stringify(incident.during_values, null, 2))}</pre></div>
-                                <div><h3>After</h3><pre>${escapeHtml(JSON.stringify(incident.after_values, null, 2))}</pre></div>
-                            </div>
-                            <div class="event-list">
-                                ${(incident.events || []).map((event) => `
-                                    <div class="event-item">
-                                        <strong>${escapeHtml(event.event_type)}</strong> • ${escapeHtml(event.event_phase)} • ${fmtDate(event.created_at)}
-                                        <div class="subtle">Severity: ${escapeHtml(event.severity)}</div>
-                                        <pre>${escapeHtml(JSON.stringify({ current: event.current_values, previous: event.previous_values }, null, 2))}</pre>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `;
-                        details.dataset.loaded = 'true';
-                    }
-                    details.classList.add('open');
-                    button.textContent = 'Hide details';
+                            <div class="subtle">Duration: ${fmtDuration(incident.duration_seconds)}</div>
+                        </div>
+                        <div class="chip-row">
+                            <span class="chip ${incident.severity}">${escapeHtml(incident.severity)}</span>
+                            <span class="chip">${escapeHtml(incident.status)}</span>
+                            <span class="chip">${incident.synthetic ? 'synthetic' : 'detected'}</span>
+                            <span class="chip">${incident.correlated ? 'correlated round' : 'isolated'}</span>
+                            ${(incident.event_types || []).map((type) => `<span class="chip">${escapeHtml(type)}</span>`).join('')}
+                        </div>
+                        <button class="ghost" data-open-incident="${incident.id}">Show details</button>
+                        <div class="details" id="incident-details-${incident.id}"></div>
+                    `;
+                    els.list.appendChild(article);
                 });
-            });
 
-            const params = new URLSearchParams(window.location.search);
-            const preselectIncident = params.get('incident');
-            if (preselectIncident) {
-                const target = document.querySelector(`[data-open-incident="${preselectIncident}"]`);
-                if (target) target.click();
+                document.querySelectorAll('[data-open-incident]').forEach((button) => {
+                    button.addEventListener('click', async () => {
+                        await openIncidentDetail(button.dataset.openIncident, button);
+                    });
+                });
+
+                const pageParams = new URLSearchParams(window.location.search);
+                const preselectIncident = pageParams.get('incident');
+                if (preselectIncident) {
+                    const target = document.querySelector(`[data-open-incident="${preselectIncident}"]`);
+                    if (target) {
+                        requestAnimationFrame(() => {
+                            openIncidentDetail(preselectIncident, target);
+                        });
+                    }
+                }
+            } catch (error) {
+                renderPageError(error.message || 'Unknown error');
             }
         }
 
