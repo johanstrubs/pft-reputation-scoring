@@ -356,6 +356,30 @@ def _sort_items(items: list[dict]) -> list[dict]:
     )
 
 
+def make_dedupe_key(category: str, metric: str, target: str) -> str:
+    return _dedupe_key(category, metric, target)
+
+
+def normalize_readiness_and_diagnostic_findings(
+    *,
+    readiness: dict | None = None,
+    diagnose: dict | None = None,
+) -> list[dict]:
+    items: list[dict] = []
+    if readiness:
+        items.extend(
+            _normalize_readiness_check(check)
+            for check in readiness.get("checks", [])
+            if check.get("status") != "pass"
+        )
+    if diagnose:
+        items.extend(
+            _normalize_diagnostic_finding(finding, diagnose["timestamp"])
+            for finding in diagnose.get("findings", [])
+        )
+    return _sort_items(_merge_duplicates(items))
+
+
 async def build_remediation_report(db, round_id: int, timestamp: str, scores: list[ValidatorScore], public_key: str) -> dict:
     if not scores:
         raise ValueError("No scoring data available yet")

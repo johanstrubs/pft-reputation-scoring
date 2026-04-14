@@ -180,6 +180,65 @@ CREATE TABLE IF NOT EXISTS ai_diagnostic_requests (
 
 CREATE INDEX IF NOT EXISTS idx_ai_diagnostic_requests_created_at ON ai_diagnostic_requests(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_diagnostic_requests_ip_created_at ON ai_diagnostic_requests(ip_address, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS improvement_snapshot_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    round_id INTEGER NOT NULL,
+    public_key TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(public_key, snapshot_date),
+    FOREIGN KEY (round_id) REFERENCES scoring_rounds(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_improvement_snapshot_runs_pubkey_date ON improvement_snapshot_runs(public_key, snapshot_date DESC);
+
+CREATE TABLE IF NOT EXISTS improvement_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    round_id INTEGER NOT NULL,
+    public_key TEXT NOT NULL,
+    finding_key TEXT NOT NULL,
+    source_json TEXT NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    detected_value TEXT,
+    expected_value TEXT,
+    estimated_impact REAL DEFAULT 0,
+    impact_confidence TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    UNIQUE(public_key, snapshot_date, finding_key),
+    FOREIGN KEY (run_id) REFERENCES improvement_snapshot_runs(id),
+    FOREIGN KEY (round_id) REFERENCES scoring_rounds(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_improvement_snapshots_pubkey_date ON improvement_snapshots(public_key, snapshot_date DESC);
+CREATE INDEX IF NOT EXISTS idx_improvement_snapshots_finding_key ON improvement_snapshots(finding_key);
+
+CREATE TABLE IF NOT EXISTS improvement_demo_resolutions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_key TEXT NOT NULL,
+    finding_key TEXT NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    opened_date TEXT NOT NULL,
+    resolved_date TEXT NOT NULL,
+    detected_value TEXT,
+    expected_value TEXT,
+    score_before REAL,
+    score_after REAL,
+    rank_before INTEGER,
+    rank_after INTEGER,
+    estimated_impact REAL DEFAULT 0,
+    impact_confidence TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_improvement_demo_pubkey ON improvement_demo_resolutions(public_key, resolved_date DESC);
 """
 
 
@@ -1136,6 +1195,174 @@ class Database:
             cursor = await db.execute(sql, tuple(params))
             row = await cursor.fetchone()
         return float(row[0] or 0.0) if row else 0.0
+
+    async def get_all_validator_keys_for_round(self, round_id: int) -> list[str]:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT public_key FROM validator_scores WHERE round_id = ? ORDER BY public_key ASC",
+                (round_id,),
+            )
+            rows = await cursor.fetchall()
+        return [row[0] for row in rows]
+
+    async def has_improvement_snapshots(self) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("SELECT 1 FROM improvement_snapshot_runs LIMIT 1")
+            row = await cursor.fetchone()
+        return row is not None
+
+    async def store_improvement_snapshot_run(
+        self,
+        *,
+        round_id: int,
+        public_key: str,
+        snapshot_date: str,
+        findings: list[dict],
+    ) -> int:
+        created_at = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """INSERT INTO improvement_snapshot_runs (round_id, public_key, snapshot_date, created_at)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(public_key, snapshot_date) DO UPDATE SET round_id = excluded.round_id, created_at = excluded.created_at
+                   RETURNING id""",
+                (round_id, public_key, snapshot_date, created_at),
+            )
+            run_row = await cursor.fetchone()
+            run_id = run_row[0]
+            await db.execute(
+                "DELETE FROM improvement_snapshots WHERE public_key = ? AND snapshot_date = ?",
+                (public_key, snapshot_date),
+            )
+            for finding in findings:
+                await db.execute(
+                    """INSERT INTO improvement_snapshots
+                       (run_id, round_id, public_key, finding_key, source_json, title, category, metric, severity,
+                        detected_value, expected_value, estimated_impact, impact_confidence, snapshot_date)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        run_id,
+                        round_id,
+                        public_key,
+                        finding["finding_key"],
+                        json.dumps(finding.get("sources", [])),
+                        finding["title"],
+                        finding["category"],
+                        finding["metric"],
+                        finding["severity"],
+                        finding.get("detected_value"),
+                        finding.get("expected_value"),
+                        finding.get("estimated_impact", 0.0),
+                        finding.get("impact_confidence", "approximate"),
+                        snapshot_date,
+                    ),
+                )
+            await db.commit()
+            return run_id
+
+    async def get_improvement_snapshot_runs(self, public_key: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM improvement_snapshot_runs"
+        params: list = []
+        if public_key:
+            sql += " WHERE public_key = ?"
+            params.append(public_key)
+        sql += " ORDER BY snapshot_date ASC, public_key ASC"
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(sql, tuple(params))
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_improvement_snapshot_rows(self, public_key: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM improvement_snapshots"
+        params: list = []
+        if public_key:
+            sql += " WHERE public_key = ?"
+            params.append(public_key)
+        sql += " ORDER BY snapshot_date ASC, public_key ASC, finding_key ASC"
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(sql, tuple(params))
+            rows = await cursor.fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["sources"] = json.loads(item.pop("source_json"))
+            result.append(item)
+        return result
+
+    async def get_improvement_tracking_since(self, public_key: str) -> str | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT MIN(snapshot_date) FROM improvement_snapshot_runs WHERE public_key = ?",
+                (public_key,),
+            )
+            row = await cursor.fetchone()
+        return row[0] if row and row[0] else None
+
+    async def get_demo_improvement_resolutions(self, public_key: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM improvement_demo_resolutions"
+        params: list = []
+        if public_key:
+            sql += " WHERE public_key = ?"
+            params.append(public_key)
+        sql += " ORDER BY resolved_date DESC, id DESC"
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(sql, tuple(params))
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def store_demo_improvement_resolution(
+        self,
+        *,
+        public_key: str,
+        finding_key: str,
+        title: str,
+        category: str,
+        metric: str,
+        severity: str,
+        opened_date: str,
+        resolved_date: str,
+        detected_value: str,
+        expected_value: str,
+        score_before: float | None,
+        score_after: float | None,
+        rank_before: int | None,
+        rank_after: int | None,
+        estimated_impact: float,
+        impact_confidence: str,
+    ) -> int:
+        created_at = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """INSERT INTO improvement_demo_resolutions
+                   (public_key, finding_key, title, category, metric, severity, opened_date, resolved_date,
+                    detected_value, expected_value, score_before, score_after, rank_before, rank_after,
+                    estimated_impact, impact_confidence, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    public_key,
+                    finding_key,
+                    title,
+                    category,
+                    metric,
+                    severity,
+                    opened_date,
+                    resolved_date,
+                    detected_value,
+                    expected_value,
+                    score_before,
+                    score_after,
+                    rank_before,
+                    rank_after,
+                    estimated_impact,
+                    impact_confidence,
+                    created_at,
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid
 
     @staticmethod
     def _row_to_incident(row, include_events: bool = False) -> dict:

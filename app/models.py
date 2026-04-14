@@ -430,3 +430,64 @@ class RemediationReportResponse(BaseModel):
     actionable_findings: list[RemediationFindingResponse]
     advisories: list[RemediationFindingResponse]
     json_report_url: str
+
+
+class ImprovementResolutionResponse(BaseModel):
+    finding_key: str
+    title: str
+    category: str
+    metric: str
+    severity: str
+    opened_date: str
+    resolved_date: str
+    days_to_resolution: int
+    score_before: float | None = None
+    score_after: float | None = None
+    score_delta: float
+    rank_before: int | None = None
+    rank_after: int | None = None
+    rank_delta: int | None = None
+    estimated_impact: float
+    impact_confidence: str
+    expected_value: str
+    detected_value: str
+    synthetic: bool = False
+
+
+class ImprovementOpenFindingResponse(BaseModel):
+    finding_key: str
+    title: str
+    category: str
+    metric: str
+    severity: str
+    first_seen_date: str
+    days_open: int
+    detected_value: str
+    expected_value: str
+    remediation_url: str
+
+
+class ImprovementNetworkSummaryResponse(BaseModel):
+    total_resolved_this_week: int
+    average_days_to_resolution: float
+    most_common_resolved_finding_type: str | None = None
+    most_common_ignored_finding_type: str | None = None
+
+
+class ImprovementReportResponse(BaseModel):
+    public_key: str
+    domain: str | None = None
+    round_id: int
+    timestamp: str
+    tracking_since: str | None = None
+    total_findings_resolved: int
+    total_score_improvement: float
+    current_rank: int | None = None
+    starting_rank: int | None = None
+    rank_delta_since_tracking: int | None = None
+    resolved_findings: list[ImprovementResolutionResponse]
+    biggest_wins: list[ImprovementResolutionResponse]
+    open_findings: list[ImprovementOpenFindingResponse]
+    network_summary: ImprovementNetworkSummaryResponse
+    demo_mode: bool = False
+    json_report_url: str

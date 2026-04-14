@@ -149,6 +149,15 @@ async def test_remediate_page():
 
 
 @pytest.mark.anyio
+async def test_improvements_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/improvements")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_readiness_page():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -844,3 +853,98 @@ async def test_remediate_endpoint_not_found(mock_scores):
              patch("app.main.build_remediation_report", new=AsyncMock(side_effect=KeyError("nHMissing"))):
             resp = await client.get("/api/remediate/nHMissing")
     assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_improvements_endpoint_success():
+    transport = ASGITransport(app=app)
+    payload = {
+        "public_key": "nHTest1",
+        "domain": "test1.example.com",
+        "round_id": 9,
+        "timestamp": "2026-04-12T12:00:00+00:00",
+        "tracking_since": "2026-04-10",
+        "total_findings_resolved": 1,
+        "total_score_improvement": 5.0,
+        "current_rank": 12,
+        "starting_rank": 15,
+        "rank_delta_since_tracking": 3,
+        "resolved_findings": [{
+            "finding_key": "version::version::3.0.0",
+            "title": "Version parity",
+            "category": "version",
+            "metric": "version",
+            "severity": "warning",
+            "opened_date": "2026-04-10",
+            "resolved_date": "2026-04-12",
+            "days_to_resolution": 2,
+            "score_before": 75.0,
+            "score_after": 80.0,
+            "score_delta": 5.0,
+            "rank_before": 15,
+            "rank_after": 12,
+            "rank_delta": 3,
+            "estimated_impact": 5.0,
+            "impact_confidence": "direct",
+            "expected_value": "3.0.0",
+            "detected_value": "1.0.0",
+            "synthetic": False,
+        }],
+        "biggest_wins": [{
+            "finding_key": "version::version::3.0.0",
+            "title": "Version parity",
+            "category": "version",
+            "metric": "version",
+            "severity": "warning",
+            "opened_date": "2026-04-10",
+            "resolved_date": "2026-04-12",
+            "days_to_resolution": 2,
+            "score_before": 75.0,
+            "score_after": 80.0,
+            "score_delta": 5.0,
+            "rank_before": 15,
+            "rank_after": 12,
+            "rank_delta": 3,
+            "estimated_impact": 5.0,
+            "impact_confidence": "direct",
+            "expected_value": "3.0.0",
+            "detected_value": "1.0.0",
+            "synthetic": False,
+        }],
+        "open_findings": [{
+            "finding_key": "performance::agreement_24h::0.95",
+            "title": "24h agreement",
+            "category": "performance",
+            "metric": "agreement_24h",
+            "severity": "warning",
+            "first_seen_date": "2026-04-11",
+            "days_open": 1,
+            "detected_value": "0.93",
+            "expected_value": "0.95",
+            "remediation_url": "/remediate?validator=nHTest1",
+        }],
+        "network_summary": {
+            "total_resolved_this_week": 2,
+            "average_days_to_resolution": 1.5,
+            "most_common_resolved_finding_type": "Version parity",
+            "most_common_ignored_finding_type": "24h agreement",
+        },
+        "demo_mode": False,
+        "json_report_url": "/api/improvements/nHTest1",
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.build_improvement_report", new=AsyncMock(return_value=payload)):
+            resp = await client.get("/api/improvements/nHTest1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["resolved_findings"][0]["title"] == "Version parity"
+    assert data["network_summary"]["total_resolved_this_week"] == 2
+
+
+@pytest.mark.anyio
+async def test_improvements_seed_demo_endpoint_conflict():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.seed_demo_improvement_resolution", new=AsyncMock(side_effect=ValueError("Demo seeding is disabled because real confirmed resolutions already exist."))):
+            resp = await client.post("/api/improvements/seed-demo", json={"validator_key": "nHTest1"})
+    assert resp.status_code == 409

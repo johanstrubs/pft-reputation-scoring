@@ -18,6 +18,7 @@ from app.upgrades import build_upgrade_report
 from app.diversity import build_diversity_report
 from app.peers import build_peer_report
 from app.remediation import build_remediation_report
+from app.improvements import build_improvement_report, seed_demo_improvement_resolution
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -42,6 +43,7 @@ from app.models import (
     DiversityReportResponse,
     PeerReportResponse,
     RemediationReportResponse,
+    ImprovementReportResponse,
 )
 
 logging.basicConfig(
@@ -389,6 +391,33 @@ async def get_remediation(public_key: str):
     return RemediationReportResponse(**report)
 
 
+class ImprovementSeedRequest(BaseModel):
+    validator_key: str | None = None
+
+
+@app.get("/api/improvements/{public_key}", response_model=ImprovementReportResponse)
+async def get_improvements(public_key: str):
+    try:
+        report = await build_improvement_report(db, public_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found") from exc
+    return ImprovementReportResponse(**report)
+
+
+@app.post("/api/improvements/seed-demo", response_model=ImprovementReportResponse)
+async def seed_improvement_demo(req: ImprovementSeedRequest):
+    try:
+        result = await seed_demo_improvement_resolution(db, public_key=req.validator_key)
+        report = await build_improvement_report(db, result["public_key"])
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found") from exc
+    return ImprovementReportResponse(**report)
+
+
 # --- Alerts & Subscriptions ---
 
 class SubscribeRequest(BaseModel):
@@ -709,6 +738,11 @@ async def peers_page():
 @app.get("/remediate")
 async def remediate_page():
     return FileResponse(os.path.join(STATIC_DIR, "remediate.html"))
+
+
+@app.get("/improvements")
+async def improvements_page():
+    return FileResponse(os.path.join(STATIC_DIR, "improvements.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

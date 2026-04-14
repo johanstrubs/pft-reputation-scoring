@@ -8,6 +8,7 @@ from app.database import Database
 from app.config import settings
 from app.digest import generate_and_store_weekly_digest
 from app.incidents import detect_and_store_incidents
+from app.improvements import snapshot_daily_findings
 
 logger = logging.getLogger(__name__)
 
@@ -103,12 +104,28 @@ async def weekly_digest_loop(db: Database):
         await asyncio.sleep(60)
 
 
+async def daily_improvement_snapshot_loop(db: Database):
+    """Store daily finding snapshots used by the improvement tracker."""
+    last_snapshot_date = None
+    while True:
+        now = datetime.now(timezone.utc)
+        if now.hour == DAILY_REPORT_HOUR and now.date() != last_snapshot_date:
+            try:
+                logger.info("Triggering daily improvement finding snapshots...")
+                await snapshot_daily_findings(db, snapshot_date=now.date().isoformat())
+                last_snapshot_date = now.date()
+            except Exception:
+                logger.exception("Daily improvement snapshot failed")
+        await asyncio.sleep(60)
+
+
 async def start_scheduler(collector: DataCollector, scorer: ReputationScorer, db: Database):
     # Run one immediate round on startup
     await run_scoring_round(collector, scorer, db)
 
     # Start daily report loop in background
     asyncio.create_task(daily_report_loop(db))
+    asyncio.create_task(daily_improvement_snapshot_loop(db))
     asyncio.create_task(weekly_digest_loop(db))
 
     # Then run scoring on interval

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Improvement Tracker</title>
+    <link rel="stylesheet" href="/static/improvements.css">
+</head>
+<body>
+    <div class="shell">
+        <header class="hero">
+            <p class="eyebrow">Validator Improvement Tracker</p>
+            <h1>Before/After Impact Timeline</h1>
+            <p class="subtle">Track resolved findings, score movement, current open work, and network-wide resolution patterns from the same public dashboard stack.</p>
+            <div class="hero-links">
+                <a href="/leaderboard">Leaderboard</a>
+                <a href="/remediate">Remediation Center</a>
+                <a href="/diagnose">Diagnostics</a>
+            </div>
+        </header>
+
+        <section class="lookup card">
+            <label for="validator-input">Validator Key</label>
+            <div class="lookup-row">
+                <input id="validator-input" placeholder="nH..." spellcheck="false" autocomplete="off">
+                <button id="load-button">Load Timeline</button>
+            </div>
+            <div class="subtle">Tip: share a prefilled URL with <code>?validator=&lt;pubkey&gt;</code>.</div>
+        </section>
+
+        <section id="status-card" class="card status-card" hidden>
+            <div>
+                <div class="eyebrow">Current Summary</div>
+                <h2 id="status-title">Loading…</h2>
+                <p id="status-subtitle" class="subtle"></p>
+            </div>
+            <div class="hero-links">
+                <a id="json-link" href="/api/improvements/" target="_blank" rel="noreferrer">Open JSON Report</a>
+            </div>
+        </section>
+
+        <section id="loading" class="card loading">Loading improvement timeline…</section>
+        <section id="error" class="card error" hidden></section>
+        <section id="empty" class="card" hidden>
+            <h2>No validator loaded yet</h2>
+            <p class="subtle">Enter a validator public key to load its improvement history.</p>
+        </section>
+
+        <main id="improvements-app" hidden>
+            <section class="summary-grid">
+                <article class="card stat">
+                    <div class="eyebrow">Resolved Findings</div>
+                    <div class="stat-value" id="resolved-count">0</div>
+                </article>
+                <article class="card stat">
+                    <div class="eyebrow">Total Score Improvement</div>
+                    <div class="stat-value" id="score-improvement">0.00</div>
+                </article>
+                <article class="card stat">
+                    <div class="eyebrow">Rank Since Tracking Began</div>
+                    <div class="stat-value" id="rank-delta">-</div>
+                </article>
+            </section>
+
+            <section class="two-col">
+                <article class="card">
+                    <h2>Biggest Wins</h2>
+                    <div id="biggest-wins" class="stack"></div>
+                </article>
+                <article class="card">
+                    <h2>Network-Wide Summary</h2>
+                    <div id="network-summary" class="stack"></div>
+                </article>
+            </section>
+
+            <section class="card">
+                <h2>Resolved Findings Timeline</h2>
+                <div id="resolved-timeline" class="stack"></div>
+            </section>
+
+            <section class="card">
+                <h2>Currently Open Findings</h2>
+                <div id="open-findings" class="stack"></div>
+            </section>
+        </main>
+    </div>
+    <script src="/static/improvements.js"></script>
+</body>
+</html>
