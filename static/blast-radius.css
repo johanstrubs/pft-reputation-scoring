@@ -1,0 +1,65 @@
+:root {
+    color-scheme: dark;
+    --bg: #08111f;
+    --panel: #111d34;
+    --panel-alt: #162743;
+    --border: #28446e;
+    --text: #edf4ff;
+    --muted: #98acd1;
+    --accent: #66b3ff;
+    --warning: #ffcc66;
+    --critical: #ff8686;
+    --success: #44d39b;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: "Avenir Next", "Segoe UI", sans-serif;
+    color: var(--text);
+    background:
+        radial-gradient(circle at top right, rgba(255, 134, 134, 0.15), transparent 30%),
+        radial-gradient(circle at top left, rgba(102, 179, 255, 0.14), transparent 28%),
+        linear-gradient(180deg, #0b1730 0%, var(--bg) 58%);
+}
+.shell { max-width: 1180px; margin: 0 auto; padding: 28px 18px 64px; }
+.card {
+    background: rgba(17, 29, 52, 0.92);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 22px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+    margin-bottom: 20px;
+}
+.hero-links, .meta { display: flex; gap: 12px; flex-wrap: wrap; }
+.hero-links a, a { color: var(--accent); text-decoration: none; }
+.hero-links a:hover, a:hover { text-decoration: underline; }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.78rem; color: var(--accent); }
+h1, h2, h3, p { margin-top: 0; }
+h1 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: 10px; }
+.subtle { color: var(--muted); }
+.summary-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.stat-value { font-size: 2rem; font-weight: 800; }
+.stack { display: grid; gap: 14px; }
+.item {
+    background: rgba(22, 39, 67, 0.58);
+    border: 1px solid rgba(152, 172, 209, 0.14);
+    border-radius: 18px;
+    padding: 16px;
+}
+.chip {
+    display: inline-flex;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(152, 172, 209, 0.18);
+    background: rgba(255,255,255,0.06);
+    font-size: 0.85rem;
+}
+.chip.critical { color: var(--critical); }
+.chip.warning { color: var(--warning); }
+.chip.info { color: var(--accent); }
+.chip.risk { color: var(--critical); }
+.loading, .error { text-align: center; font-size: 1.05rem; }
+@media (max-width: 720px) {
+    .shell { padding: 18px 12px 40px; }
+    .card { padding: 18px; border-radius: 18px; }
+}

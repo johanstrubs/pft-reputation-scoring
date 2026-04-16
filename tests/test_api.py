@@ -158,6 +158,15 @@ async def test_improvements_page():
 
 
 @pytest.mark.anyio
+async def test_blast_radius_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/blast-radius")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_readiness_page():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -948,3 +957,90 @@ async def test_improvements_seed_demo_endpoint_conflict():
         with patch("app.main.seed_demo_improvement_resolution", new=AsyncMock(side_effect=ValueError("Demo seeding is disabled because real confirmed resolutions already exist."))):
             resp = await client.post("/api/improvements/seed-demo", json={"validator_key": "nHTest1"})
     assert resp.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_blast_radius_endpoint_success():
+    transport = ASGITransport(app=app)
+    payload = {
+        "round_id": 10,
+        "timestamp": "2026-04-16T12:00:00+00:00",
+        "total_validators": 12,
+        "concentration_risks": [{
+            "dependency_type": "provider",
+            "dependency_value": "Hetzner",
+            "affected_validators": 5,
+            "network_pct": 41.7,
+            "remaining_validators_if_failed": 7,
+            "consensus_risk": True,
+            "mitigation_guidance": "Review /diversity.",
+        }],
+        "active_correlations": [{
+            "id": 1,
+            "correlation_type": "provider",
+            "dependency_value": "Hetzner",
+            "severity": "critical",
+            "status": "open",
+            "synthetic": False,
+            "start_round_id": 10,
+            "latest_round_id": 10,
+            "start_timestamp": "2026-04-16T12:00:00+00:00",
+            "latest_timestamp": "2026-04-16T12:00:00+00:00",
+            "end_timestamp": None,
+            "duration_seconds": None,
+            "affected_validators": ["nH1", "nH2", "nH3"],
+            "triggering_incident_ids": [1, 2, 3],
+            "affected_count": 3,
+            "network_pct": 25.0,
+            "consensus_risk": True,
+            "avg_score_drop": 7.5,
+            "peak_affected_count": 3,
+            "peak_network_pct": 25.0,
+            "remaining_validators_if_failed": 9,
+            "mitigation_guidance": "guidance",
+            "suspected_cause": "Shared provider dependency: Hetzner",
+        }],
+        "historical_correlations": [],
+        "json_report_url": "/api/blast-radius",
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.build_blast_radius_report", new=AsyncMock(return_value=payload)):
+            resp = await client.get("/api/blast-radius")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["active_correlations"][0]["dependency_value"] == "Hetzner"
+
+
+@pytest.mark.anyio
+async def test_blast_radius_test_endpoint_success():
+    transport = ASGITransport(app=app)
+    event = {
+        "id": 1,
+        "correlation_type": "provider",
+        "dependency_value": "Hetzner",
+        "severity": "critical",
+        "status": "open",
+        "synthetic": True,
+        "start_round_id": 10,
+        "latest_round_id": 10,
+        "start_timestamp": "2026-04-16T12:00:00+00:00",
+        "latest_timestamp": "2026-04-16T12:00:00+00:00",
+        "end_timestamp": None,
+        "duration_seconds": None,
+        "affected_validators": ["nH1", "nH2", "nH3"],
+        "triggering_incident_ids": [],
+        "affected_count": 3,
+        "network_pct": 25.0,
+        "consensus_risk": True,
+        "avg_score_drop": 6.0,
+        "peak_affected_count": 3,
+        "peak_network_pct": 25.0,
+        "remaining_validators_if_failed": 9,
+        "mitigation_guidance": "guidance",
+        "suspected_cause": "Shared provider dependency: Hetzner",
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.inject_synthetic_correlated_event", new=AsyncMock(return_value=event)):
+            resp = await client.post("/api/blast-radius/test", json={"provider": "Hetzner"})
+    assert resp.status_code == 200
+    assert resp.json()["synthetic"] is True

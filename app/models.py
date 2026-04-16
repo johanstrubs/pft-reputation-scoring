@@ -491,3 +491,49 @@ class ImprovementReportResponse(BaseModel):
     network_summary: ImprovementNetworkSummaryResponse
     demo_mode: bool = False
     json_report_url: str
+
+
+class BlastRadiusRiskEntryResponse(BaseModel):
+    dependency_type: str
+    dependency_value: str
+    affected_validators: int
+    network_pct: float
+    remaining_validators_if_failed: int
+    consensus_risk: bool
+    mitigation_guidance: str
+
+
+class BlastRadiusEventResponse(BaseModel):
+    id: int
+    correlation_type: str
+    dependency_value: str
+    severity: str
+    status: str
+    synthetic: bool = False
+    start_round_id: int | None = None
+    latest_round_id: int | None = None
+    start_timestamp: str
+    latest_timestamp: str
+    end_timestamp: str | None = None
+    duration_seconds: int | None = None
+    affected_validators: list[str]
+    triggering_incident_ids: list[int]
+    affected_count: int
+    network_pct: float
+    consensus_risk: bool
+    avg_score_drop: float | None = None
+    peak_affected_count: int
+    peak_network_pct: float
+    remaining_validators_if_failed: int
+    mitigation_guidance: str
+    suspected_cause: str
+
+
+class BlastRadiusReportResponse(BaseModel):
+    round_id: int
+    timestamp: str
+    total_validators: int
+    concentration_risks: list[BlastRadiusRiskEntryResponse]
+    active_correlations: list[BlastRadiusEventResponse]
+    historical_correlations: list[BlastRadiusEventResponse]
+    json_report_url: str

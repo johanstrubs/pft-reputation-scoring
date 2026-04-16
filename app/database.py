@@ -239,6 +239,36 @@ CREATE TABLE IF NOT EXISTS improvement_demo_resolutions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_improvement_demo_pubkey ON improvement_demo_resolutions(public_key, resolved_date DESC);
+
+CREATE TABLE IF NOT EXISTS correlated_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    correlation_type TEXT NOT NULL,
+    dependency_value TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    status TEXT NOT NULL,
+    synthetic BOOLEAN DEFAULT 0,
+    start_round_id INTEGER,
+    latest_round_id INTEGER,
+    start_timestamp TEXT NOT NULL,
+    latest_timestamp TEXT NOT NULL,
+    end_timestamp TEXT,
+    duration_seconds INTEGER,
+    affected_validators_json TEXT NOT NULL,
+    triggering_incident_ids_json TEXT NOT NULL,
+    affected_count INTEGER NOT NULL,
+    network_pct REAL NOT NULL,
+    consensus_risk BOOLEAN DEFAULT 0,
+    avg_score_drop REAL,
+    peak_affected_count INTEGER NOT NULL,
+    peak_network_pct REAL NOT NULL,
+    remaining_validators_if_failed INTEGER NOT NULL,
+    mitigation_guidance TEXT NOT NULL,
+    suspected_cause TEXT NOT NULL,
+    UNIQUE(correlation_type, dependency_value, status)
+);
+
+CREATE INDEX IF NOT EXISTS idx_correlated_events_status ON correlated_events(status);
+CREATE INDEX IF NOT EXISTS idx_correlated_events_latest_timestamp ON correlated_events(latest_timestamp DESC);
 """
 
 
@@ -1364,6 +1394,174 @@ class Database:
             await db.commit()
             return cursor.lastrowid
 
+    async def get_incidents_for_round(self, round_id: int) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM incidents WHERE latest_round_id = ? ORDER BY start_time DESC",
+                (round_id,),
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_incident(row, include_events=False) for row in rows]
+
+    async def get_open_correlated_events(self) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM correlated_events WHERE status = 'open' ORDER BY latest_timestamp DESC"
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_correlated_event(row) for row in rows]
+
+    async def get_open_correlated_event_by_key(self, correlation_type: str, dependency_value: str) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT * FROM correlated_events
+                   WHERE correlation_type = ? AND dependency_value = ? AND status = 'open'
+                   ORDER BY id DESC LIMIT 1""",
+                (correlation_type, dependency_value),
+            )
+            row = await cursor.fetchone()
+        return self._row_to_correlated_event(row) if row else None
+
+    async def create_correlated_event(
+        self,
+        *,
+        correlation_type: str,
+        dependency_value: str,
+        severity: str,
+        status: str,
+        synthetic: bool,
+        start_round_id: int | None,
+        latest_round_id: int | None,
+        start_timestamp: str,
+        latest_timestamp: str,
+        affected_validators: list[str],
+        triggering_incident_ids: list[int],
+        affected_count: int,
+        network_pct: float,
+        consensus_risk: bool,
+        avg_score_drop: float | None,
+        peak_affected_count: int,
+        peak_network_pct: float,
+        remaining_validators_if_failed: int,
+        mitigation_guidance: str,
+        suspected_cause: str,
+        end_timestamp: str | None = None,
+    ) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """INSERT INTO correlated_events
+                   (correlation_type, dependency_value, severity, status, synthetic, start_round_id, latest_round_id,
+                    start_timestamp, latest_timestamp, end_timestamp, duration_seconds, affected_validators_json,
+                    triggering_incident_ids_json, affected_count, network_pct, consensus_risk, avg_score_drop,
+                    peak_affected_count, peak_network_pct, remaining_validators_if_failed, mitigation_guidance, suspected_cause)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    correlation_type,
+                    dependency_value,
+                    severity,
+                    status,
+                    int(synthetic),
+                    start_round_id,
+                    latest_round_id,
+                    start_timestamp,
+                    latest_timestamp,
+                    end_timestamp,
+                    self._duration_seconds(start_timestamp, end_timestamp),
+                    json.dumps(affected_validators),
+                    json.dumps(triggering_incident_ids),
+                    affected_count,
+                    network_pct,
+                    int(consensus_risk),
+                    avg_score_drop,
+                    peak_affected_count,
+                    peak_network_pct,
+                    remaining_validators_if_failed,
+                    mitigation_guidance,
+                    suspected_cause,
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def update_correlated_event(
+        self,
+        event_id: int,
+        *,
+        severity: str,
+        status: str,
+        latest_round_id: int | None,
+        latest_timestamp: str,
+        affected_validators: list[str],
+        triggering_incident_ids: list[int],
+        affected_count: int,
+        network_pct: float,
+        consensus_risk: bool,
+        avg_score_drop: float | None,
+        peak_affected_count: int,
+        peak_network_pct: float,
+        remaining_validators_if_failed: int,
+        mitigation_guidance: str,
+        suspected_cause: str,
+        end_timestamp: str | None = None,
+    ):
+        current = await self.get_correlated_event(event_id)
+        start_timestamp = current["start_timestamp"] if current else latest_timestamp
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """UPDATE correlated_events
+                   SET severity = ?, status = ?, latest_round_id = ?, latest_timestamp = ?, end_timestamp = ?,
+                       duration_seconds = ?, affected_validators_json = ?, triggering_incident_ids_json = ?,
+                       affected_count = ?, network_pct = ?, consensus_risk = ?, avg_score_drop = ?,
+                       peak_affected_count = ?, peak_network_pct = ?, remaining_validators_if_failed = ?,
+                       mitigation_guidance = ?, suspected_cause = ?
+                   WHERE id = ?""",
+                (
+                    severity,
+                    status,
+                    latest_round_id,
+                    latest_timestamp,
+                    end_timestamp,
+                    self._duration_seconds(start_timestamp, end_timestamp),
+                    json.dumps(affected_validators),
+                    json.dumps(triggering_incident_ids),
+                    affected_count,
+                    network_pct,
+                    int(consensus_risk),
+                    avg_score_drop,
+                    peak_affected_count,
+                    peak_network_pct,
+                    remaining_validators_if_failed,
+                    mitigation_guidance,
+                    suspected_cause,
+                    event_id,
+                ),
+            )
+            await db.commit()
+
+    async def get_correlated_event(self, event_id: int) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM correlated_events WHERE id = ?", (event_id,))
+            row = await cursor.fetchone()
+        return self._row_to_correlated_event(row) if row else None
+
+    async def get_correlated_events(self, *, status: str | None = None, limit: int = 100) -> list[dict]:
+        sql = "SELECT * FROM correlated_events"
+        params: list = []
+        if status:
+            sql += " WHERE status = ?"
+            params.append(status)
+        sql += " ORDER BY latest_timestamp DESC LIMIT ?"
+        params.append(limit)
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(sql, tuple(params))
+            rows = await cursor.fetchall()
+        return [self._row_to_correlated_event(row) for row in rows]
+
     @staticmethod
     def _row_to_incident(row, include_events: bool = False) -> dict:
         if row is None:
@@ -1406,6 +1604,36 @@ class Database:
             "created_at": row["created_at"],
             "current_values": json.loads(row["current_values_json"]),
             "previous_values": json.loads(row["previous_values_json"]) if row["previous_values_json"] else None,
+        }
+
+    @staticmethod
+    def _row_to_correlated_event(row) -> dict:
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "correlation_type": row["correlation_type"],
+            "dependency_value": row["dependency_value"],
+            "severity": row["severity"],
+            "status": row["status"],
+            "synthetic": bool(row["synthetic"]),
+            "start_round_id": row["start_round_id"],
+            "latest_round_id": row["latest_round_id"],
+            "start_timestamp": row["start_timestamp"],
+            "latest_timestamp": row["latest_timestamp"],
+            "end_timestamp": row["end_timestamp"],
+            "duration_seconds": row["duration_seconds"],
+            "affected_validators": json.loads(row["affected_validators_json"]),
+            "triggering_incident_ids": json.loads(row["triggering_incident_ids_json"]),
+            "affected_count": row["affected_count"],
+            "network_pct": row["network_pct"],
+            "consensus_risk": bool(row["consensus_risk"]),
+            "avg_score_drop": row["avg_score_drop"],
+            "peak_affected_count": row["peak_affected_count"],
+            "peak_network_pct": row["peak_network_pct"],
+            "remaining_validators_if_failed": row["remaining_validators_if_failed"],
+            "mitigation_guidance": row["mitigation_guidance"],
+            "suspected_cause": row["suspected_cause"],
         }
 
     @staticmethod

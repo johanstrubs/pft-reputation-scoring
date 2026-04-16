@@ -9,6 +9,7 @@ from app.config import settings
 from app.digest import generate_and_store_weekly_digest
 from app.incidents import detect_and_store_incidents
 from app.improvements import snapshot_daily_findings
+from app.blast_radius import detect_and_store_correlated_events
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,11 @@ async def run_scoring_round(collector: DataCollector, scorer: ReputationScorer, 
             await detect_and_store_incidents(db, round_id)
         except Exception:
             logger.exception("Incident detection failed for round %d", round_id)
+
+        try:
+            await detect_and_store_correlated_events(db, round_id)
+        except Exception:
+            logger.exception("Correlated outage detection failed for round %d", round_id)
 
         return round_id
     except Exception:

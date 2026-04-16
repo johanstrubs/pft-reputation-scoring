@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Correlated Outage and Blast Radius Detector</title>
+    <link rel="stylesheet" href="/static/blast-radius.css">
+</head>
+<body>
+    <div class="shell">
+        <header class="hero card">
+            <p class="eyebrow">Blast Radius Detector</p>
+            <h1>Correlated Outage and Dependency Risk</h1>
+            <p class="subtle">Standing concentration risks plus active and historical correlated failures across provider, ASN, and country dependencies.</p>
+            <div class="hero-links">
+                <a href="/incidents">Incident Timeline</a>
+                <a href="/network">Network Map</a>
+                <a href="/diversity">Diversity Recommender</a>
+                <a id="json-link" href="/api/blast-radius" target="_blank" rel="noreferrer">Open JSON Feed</a>
+            </div>
+        </header>
+
+        <section id="loading" class="card loading">Loading blast radius analysis…</section>
+        <section id="error" class="card error" hidden></section>
+
+        <main id="app" hidden>
+            <section class="summary-grid">
+                <article class="card stat">
+                    <div class="eyebrow">Current Round</div>
+                    <div class="stat-value" id="round-id">-</div>
+                </article>
+                <article class="card stat">
+                    <div class="eyebrow">Active Correlations</div>
+                    <div class="stat-value" id="active-count">0</div>
+                </article>
+                <article class="card stat">
+                    <div class="eyebrow">Tracked Validators</div>
+                    <div class="stat-value" id="validator-count">0</div>
+                </article>
+            </section>
+
+            <section class="card">
+                <h2>Standing Concentration Risks</h2>
+                <div id="risk-list" class="stack"></div>
+            </section>
+
+            <section class="card">
+                <h2>Active Correlated Events</h2>
+                <div id="active-list" class="stack"></div>
+            </section>
+
+            <section class="card">
+                <h2>Historical Correlations</h2>
+                <div id="history-list" class="stack"></div>
+            </section>
+        </main>
+    </div>
+    <script src="/static/blast-radius.js"></script>
+</body>
+</html>

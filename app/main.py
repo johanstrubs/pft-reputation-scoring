@@ -19,6 +19,7 @@ from app.diversity import build_diversity_report
 from app.peers import build_peer_report
 from app.remediation import build_remediation_report
 from app.improvements import build_improvement_report, seed_demo_improvement_resolution
+from app.blast_radius import build_blast_radius_report, inject_synthetic_correlated_event
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -44,6 +45,8 @@ from app.models import (
     PeerReportResponse,
     RemediationReportResponse,
     ImprovementReportResponse,
+    BlastRadiusReportResponse,
+    BlastRadiusEventResponse,
 )
 
 logging.basicConfig(
@@ -418,6 +421,28 @@ async def seed_improvement_demo(req: ImprovementSeedRequest):
     return ImprovementReportResponse(**report)
 
 
+class BlastRadiusTestRequest(BaseModel):
+    provider: str | None = None
+
+
+@app.get("/api/blast-radius", response_model=BlastRadiusReportResponse)
+async def get_blast_radius():
+    try:
+        report = await build_blast_radius_report(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return BlastRadiusReportResponse(**report)
+
+
+@app.post("/api/blast-radius/test", response_model=BlastRadiusEventResponse)
+async def create_blast_radius_test(req: BlastRadiusTestRequest):
+    try:
+        event = await inject_synthetic_correlated_event(db, provider=req.provider)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return BlastRadiusEventResponse(**event)
+
+
 # --- Alerts & Subscriptions ---
 
 class SubscribeRequest(BaseModel):
@@ -743,6 +768,11 @@ async def remediate_page():
 @app.get("/improvements")
 async def improvements_page():
     return FileResponse(os.path.join(STATIC_DIR, "improvements.html"))
+
+
+@app.get("/blast-radius")
+async def blast_radius_page():
+    return FileResponse(os.path.join(STATIC_DIR, "blast-radius.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
