@@ -537,3 +537,59 @@ class BlastRadiusReportResponse(BaseModel):
     active_correlations: list[BlastRadiusEventResponse]
     historical_correlations: list[BlastRadiusEventResponse]
     json_report_url: str
+
+
+class DatasetSnapshotResponse(BaseModel):
+    dataset_schema_version: str
+    snapshot_date: str
+    round_id: int
+    timestamp: str
+    validator_count: int
+    round_summary: dict
+    validator_scores: list[dict]
+    topology: list[dict]
+    incidents: dict
+    version_distribution: list[dict]
+    concentration_metrics: dict
+    network_health_index: dict
+    dataset_metadata: dict | None = None
+
+
+class DatasetTimeseriesResponse(BaseModel):
+    dataset_schema_version: str
+    public_key: str
+    days: int
+    history: list[dict]
+
+
+class DatasetDiffResponse(BaseModel):
+    dataset_schema_version: str
+    from_snapshot_date: str
+    to_snapshot_date: str
+    validators_added: list[str]
+    validators_removed: list[str]
+    score_changes: list[dict]
+    rank_changes: list[dict]
+    incidents_opened: list[dict]
+    incidents_closed: list[dict]
+    concentration_deltas: dict
+    version_distribution_delta: list[dict]
+
+
+class DatasetSchemaResponse(BaseModel):
+    dataset_schema_version: str
+    network_health_formula_version: str
+    readme: dict
+
+
+class RiskReportResponse(BaseModel):
+    dataset_schema_version: str
+    formula_version: str
+    snapshot_date: str
+    round_id: int
+    timestamp: str
+    score: float
+    score_semantics: str
+    formula: dict
+    components: dict
+    trend_7d: list[dict]

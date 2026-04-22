@@ -1,0 +1,115 @@
+body {
+    margin: 0;
+    font-family: "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #08111f 0%, #0d1930 45%, #101a2f 100%);
+    color: #ecf3ff;
+}
+
+.shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 18px 48px;
+}
+
+.card {
+    background: rgba(13, 23, 43, 0.92);
+    border: 1px solid rgba(99, 146, 255, 0.18);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+    margin-bottom: 20px;
+}
+
+.hero h1,
+.card h2,
+.download-item h3 {
+    margin-top: 0;
+}
+
+.eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.75rem;
+    color: #8db4ff;
+}
+
+.subtle {
+    color: #aebddb;
+}
+
+.hero-links,
+.download-grid,
+.summary-grid {
+    display: grid;
+    gap: 14px;
+}
+
+.hero-links {
+    grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
+    margin-top: 18px;
+}
+
+.hero-links a,
+.download-item a {
+    color: #8bb7ff;
+}
+
+.summary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.stat-value,
+.big-score {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.big-score {
+    color: #8ee29b;
+    margin-bottom: 8px;
+}
+
+.download-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.download-item {
+    padding: 18px;
+    border-radius: 18px;
+    background: rgba(19, 33, 61, 0.9);
+    border: 1px solid rgba(99, 146, 255, 0.14);
+}
+
+.stack {
+    display: grid;
+    gap: 12px;
+}
+
+.component-item,
+.doc-item {
+    border-radius: 16px;
+    padding: 14px 16px;
+    background: rgba(18, 31, 56, 0.82);
+    border: 1px solid rgba(99, 146, 255, 0.12);
+}
+
+.code-block {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.9rem;
+    color: #d8e4ff;
+    background: rgba(7, 12, 24, 0.95);
+    border-radius: 16px;
+    padding: 16px;
+    overflow-x: auto;
+}
+
+.loading,
+.error {
+    text-align: center;
+}
+
+code {
+    color: #ffdc92;
+}

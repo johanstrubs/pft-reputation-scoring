@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Ground Truth Dataset</title>
+    <link rel="stylesheet" href="/static/dataset.css">
+</head>
+<body>
+    <div class="shell">
+        <header class="hero card">
+            <p class="eyebrow">Ground Truth Dataset</p>
+            <h1>Public Validator Dataset and Historical Export API</h1>
+            <p class="subtle">Versioned daily snapshots of validator scores, topology, incidents, concentration metrics, and the network health index.</p>
+            <div class="hero-links">
+                <a href="/leaderboard">Leaderboard</a>
+                <a href="/network">Network</a>
+                <a href="/upgrades">Upgrades</a>
+                <a href="/api/dataset/latest" id="json-link" target="_blank" rel="noreferrer">Latest Snapshot JSON</a>
+            </div>
+        </header>
+
+        <section id="loading" class="card loading">Loading dataset summary…</section>
+        <section id="error" class="card error" hidden></section>
+
+        <main id="app" hidden>
+            <section class="summary-grid">
+                <article class="card stat">
+                    <div class="eyebrow">Date Range</div>
+                    <div class="stat-value" id="date-range">-</div>
+                </article>
+                <article class="card stat">
+                    <div class="eyebrow">Daily Snapshots</div>
+                    <div class="stat-value" id="snapshot-count">0</div>
+                </article>
+                <article class="card stat">
+                    <div class="eyebrow">Validator-Day Rows</div>
+                    <div class="stat-value" id="record-count">0</div>
+                </article>
+                <article class="card stat">
+                    <div class="eyebrow">Schema Version</div>
+                    <div class="stat-value" id="schema-version">-</div>
+                </article>
+            </section>
+
+            <section class="card">
+                <h2>Downloads</h2>
+                <div class="download-grid">
+                    <article class="download-item">
+                        <h3>JSON Export</h3>
+                        <a id="json-export-link" href="/api/dataset/export?format=json">Download full JSON dataset</a>
+                        <div class="subtle">SHA-256: <code id="json-hash">loading…</code></div>
+                    </article>
+                    <article class="download-item">
+                        <h3>CSV Export</h3>
+                        <a id="csv-export-link" href="/api/dataset/export?format=csv">Download zipped CSV bundle</a>
+                        <div class="subtle">SHA-256: <code id="csv-hash">loading…</code></div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>Network Health Index</h2>
+                <div id="health-score" class="big-score">-</div>
+                <div id="health-semantics" class="subtle"></div>
+                <div id="health-components" class="stack"></div>
+            </section>
+
+            <section class="card">
+                <h2>Latest Snapshot Preview</h2>
+                <pre id="snapshot-preview" class="code-block"></pre>
+            </section>
+
+            <section class="card">
+                <h2>API Documentation</h2>
+                <div id="api-docs" class="stack"></div>
+            </section>
+        </main>
+    </div>
+    <script src="/static/dataset.js"></script>
+</body>
+</html>

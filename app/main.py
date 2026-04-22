@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -6,7 +7,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -20,6 +21,16 @@ from app.peers import build_peer_report
 from app.remediation import build_remediation_report
 from app.improvements import build_improvement_report, seed_demo_improvement_resolution
 from app.blast_radius import build_blast_radius_report, inject_synthetic_correlated_event
+from app.dataset import (
+    build_dataset_diff,
+    build_dataset_export_csv_zip,
+    build_dataset_export_json,
+    build_dataset_schema,
+    build_dataset_timeseries,
+    build_daily_snapshot,
+    build_latest_dataset_snapshot,
+    build_risk_report,
+)
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -47,6 +58,11 @@ from app.models import (
     ImprovementReportResponse,
     BlastRadiusReportResponse,
     BlastRadiusEventResponse,
+    DatasetSnapshotResponse,
+    DatasetTimeseriesResponse,
+    DatasetDiffResponse,
+    DatasetSchemaResponse,
+    RiskReportResponse,
 )
 
 logging.basicConfig(
@@ -443,6 +459,94 @@ async def create_blast_radius_test(req: BlastRadiusTestRequest):
     return BlastRadiusEventResponse(**event)
 
 
+@app.get("/api/dataset/latest", response_model=DatasetSnapshotResponse)
+async def get_dataset_latest():
+    try:
+        snapshot = await build_latest_dataset_snapshot(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return DatasetSnapshotResponse(**snapshot)
+
+
+@app.get("/api/dataset/snapshot/{snapshot_date}", response_model=DatasetSnapshotResponse)
+async def get_dataset_snapshot(snapshot_date: str):
+    try:
+        snapshot = await build_daily_snapshot(db, snapshot_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Snapshot not found for that date") from exc
+    return DatasetSnapshotResponse(**snapshot)
+
+
+@app.get("/api/dataset/timeseries/{public_key}", response_model=DatasetTimeseriesResponse)
+async def get_dataset_timeseries(public_key: str, days: int = 30):
+    try:
+        report = await build_dataset_timeseries(db, public_key, days=days)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Validator not found in daily snapshots") from exc
+    return DatasetTimeseriesResponse(**report)
+
+
+@app.get("/api/dataset/diff/{date1}/{date2}", response_model=DatasetDiffResponse)
+async def get_dataset_diff(date1: str, date2: str):
+    try:
+        diff = await build_dataset_diff(db, date1, date2)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Snapshot not found for date: {exc.args[0]}") from exc
+    return DatasetDiffResponse(**diff)
+
+
+@app.get("/api/dataset/schema", response_model=DatasetSchemaResponse)
+async def get_dataset_schema():
+    return DatasetSchemaResponse(**build_dataset_schema())
+
+
+@app.api_route("/api/dataset/export", methods=["GET", "HEAD"])
+async def get_dataset_export(request: Request, format: str = "json"):
+    export_format = (format or "json").lower()
+    if export_format not in {"json", "csv"}:
+        raise HTTPException(status_code=400, detail="format must be json or csv")
+
+    try:
+        if export_format == "json":
+            document = await build_dataset_export_json(db)
+            payload = JSONResponse(content=document)
+            body = payload.body
+            sha256 = hashlib.sha256(body).hexdigest()
+            headers = {
+                "X-Content-SHA256": sha256,
+                "Content-Disposition": 'attachment; filename="pft-ground-truth-dataset.json"',
+            }
+            if request.method == "HEAD":
+                return Response(status_code=200, media_type="application/json", headers=headers)
+            return Response(content=body, media_type="application/json", headers=headers)
+
+        archive_bytes, sha256 = await build_dataset_export_csv_zip(db)
+        headers = {
+            "X-Content-SHA256": sha256,
+            "Content-Disposition": 'attachment; filename="pft-ground-truth-dataset.zip"',
+        }
+        if request.method == "HEAD":
+            return Response(status_code=200, media_type="application/zip", headers=headers)
+        return Response(content=archive_bytes, media_type="application/zip", headers=headers)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/risk", response_model=RiskReportResponse)
+async def get_risk():
+    try:
+        report = await build_risk_report(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return RiskReportResponse(**report)
+
+
 # --- Alerts & Subscriptions ---
 
 class SubscribeRequest(BaseModel):
@@ -773,6 +877,11 @@ async def improvements_page():
 @app.get("/blast-radius")
 async def blast_radius_page():
     return FileResponse(os.path.join(STATIC_DIR, "blast-radius.html"))
+
+
+@app.get("/dataset")
+async def dataset_page():
+    return FileResponse(os.path.join(STATIC_DIR, "dataset.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

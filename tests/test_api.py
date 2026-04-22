@@ -167,6 +167,15 @@ async def test_blast_radius_page():
 
 
 @pytest.mark.anyio
+async def test_dataset_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/dataset")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
 async def test_readiness_page():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -256,6 +265,68 @@ async def test_latest_digest_endpoint():
     data = resp.json()
     assert data["delivery_status"] == "posted"
     assert data["payload"]["joins"][0]["public_key"] == "nHJoin"
+
+
+@pytest.mark.anyio
+async def test_dataset_latest_endpoint():
+    transport = ASGITransport(app=app)
+    snapshot = {
+        "dataset_schema_version": "v1",
+        "snapshot_date": "2026-04-21",
+        "round_id": 101,
+        "timestamp": "2026-04-21T23:55:00+00:00",
+        "validator_count": 2,
+        "round_summary": {"avg_score": 80.0, "min_score": 70.0, "max_score": 90.0},
+        "validator_scores": [{"public_key": "nHA", "rank": 1, "composite_score": 90.0, "metrics": {}, "sub_scores": {}}],
+        "topology": [{"public_key": "nHA", "provider": "Hetzner", "asn": 24940, "country": "DE", "enriched": True}],
+        "incidents": {"open_incidents": [], "severity_counts": {}, "open_incident_count": 0},
+        "version_distribution": [{"version": "1.1.0", "count": 2, "percentage": 100.0}],
+        "concentration_metrics": {"providers": [], "asns": [], "countries": []},
+        "network_health_index": {"formula_version": "v1", "score": 88.5, "score_semantics": "Higher is healthier.", "formula": {"summary": "weighted"}, "components": {}},
+        "dataset_metadata": {"total_daily_snapshots": 8, "total_validator_day_score_records": 320, "date_range": {"start": "2026-04-14", "end": "2026-04-21"}},
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.build_latest_dataset_snapshot", new_callable=AsyncMock, return_value=snapshot):
+            resp = await client.get("/api/dataset/latest")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["snapshot_date"] == "2026-04-21"
+    assert data["network_health_index"]["score"] == 88.5
+
+
+@pytest.mark.anyio
+async def test_dataset_export_head_includes_hash():
+    transport = ASGITransport(app=app)
+    export_doc = {"metadata": {"dataset_schema_version": "v1"}, "schema": {"dataset_schema_version": "v1"}, "snapshots": []}
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.build_dataset_export_json", new_callable=AsyncMock, return_value=export_doc):
+            resp = await client.head("/api/dataset/export?format=json")
+    assert resp.status_code == 200
+    assert resp.headers["x-content-sha256"]
+
+
+@pytest.mark.anyio
+async def test_risk_endpoint():
+    transport = ASGITransport(app=app)
+    risk = {
+        "dataset_schema_version": "v1",
+        "formula_version": "v1",
+        "snapshot_date": "2026-04-21",
+        "round_id": 101,
+        "timestamp": "2026-04-21T23:55:00+00:00",
+        "score": 90.1,
+        "score_semantics": "Higher is healthier.",
+        "formula": {"summary": "weighted"},
+        "components": {"version_adoption": {"normalized_score": 100}},
+        "trend_7d": [{"date": "2026-04-21", "score": 90.1}],
+    }
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("app.main.build_risk_report", new_callable=AsyncMock, return_value=risk):
+            resp = await client.get("/api/risk")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["score"] == 90.1
+    assert data["trend_7d"][0]["date"] == "2026-04-21"
 
 
 @pytest.mark.anyio

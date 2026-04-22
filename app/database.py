@@ -448,6 +448,55 @@ class Database:
                 for r in rows
             ]
 
+    async def get_daily_snapshot_rounds(self) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT sr.id,
+                       sr.timestamp,
+                       sr.validator_count,
+                       sr.avg_score,
+                       sr.min_score,
+                       sr.max_score,
+                       daily.snapshot_date
+                FROM scoring_rounds sr
+                JOIN (
+                    SELECT substr(timestamp, 1, 10) AS snapshot_date, MAX(id) AS round_id
+                    FROM scoring_rounds
+                    GROUP BY substr(timestamp, 1, 10)
+                ) daily ON daily.round_id = sr.id
+                ORDER BY daily.snapshot_date ASC
+                """
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_validator_score_rows_for_round_ids(self, round_ids: list[int]) -> list[dict]:
+        if not round_ids:
+            return []
+        placeholders = ",".join("?" for _ in round_ids)
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                f"""
+                SELECT vs.*,
+                       sr.timestamp AS round_timestamp,
+                       sr.validator_count,
+                       sr.avg_score,
+                       sr.min_score,
+                       sr.max_score,
+                       substr(sr.timestamp, 1, 10) AS snapshot_date
+                FROM validator_scores vs
+                JOIN scoring_rounds sr ON sr.id = vs.round_id
+                WHERE vs.round_id IN ({placeholders})
+                ORDER BY vs.round_id ASC, vs.composite_score DESC, vs.public_key ASC
+                """,
+                tuple(round_ids),
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
     async def get_upgrade_history_rows(self) -> list[dict]:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
@@ -921,6 +970,31 @@ class Database:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
                 "SELECT * FROM incidents WHERE status = 'open' ORDER BY start_time DESC"
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_incident(row, include_events=False) for row in rows]
+
+    async def get_incidents_open_as_of(self, timestamp: str) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT *
+                FROM incidents
+                WHERE start_time <= ?
+                  AND (end_time IS NULL OR end_time > ?)
+                ORDER BY start_time DESC, id DESC
+                """,
+                (timestamp, timestamp),
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_incident(row, include_events=False) for row in rows]
+
+    async def get_all_incidents_export_rows(self) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM incidents ORDER BY start_time ASC, id ASC"
             )
             rows = await cursor.fetchall()
         return [self._row_to_incident(row, include_events=False) for row in rows]
