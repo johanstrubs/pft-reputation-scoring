@@ -11,6 +11,12 @@ function prettyJson(value) {
     return JSON.stringify(value, null, 2);
 }
 
+function shiftDate(isoDate, days) {
+    const base = new Date(`${isoDate}T00:00:00Z`);
+    base.setUTCDate(base.getUTCDate() + days);
+    return base.toISOString().slice(0, 10);
+}
+
 function renderComponents(components) {
     const root = $("health-components");
     const entries = Object.entries(components || {});
@@ -105,6 +111,14 @@ async function loadDatasetPage() {
         $("health-score").textContent = String(risk.score ?? "-");
         $("health-semantics").textContent = risk.score_semantics || "";
         $("json-link").href = "/api/dataset/latest";
+        $("latest-link").href = "/api/dataset/latest";
+        $("schema-link").href = "/api/dataset/schema";
+        $("risk-link").href = "/api/risk";
+        const coveredStart = meta.date_range?.start || latest.snapshot_date;
+        const datedSnapshotDate = coveredStart === latest.snapshot_date ? latest.snapshot_date : shiftDate(latest.snapshot_date, -1);
+        $("dated-snapshot-link").href = `/api/dataset/snapshot/${datedSnapshotDate}`;
+        $("dated-snapshot-link").textContent = `/api/dataset/snapshot/${datedSnapshotDate}`;
+        $("dated-snapshot-note").textContent = `Example dated snapshot from the current covered range (${coveredStart} to ${meta.date_range?.end || latest.snapshot_date}).`;
         $("snapshot-preview").textContent = prettyJson({
             snapshot_date: latest.snapshot_date,
             round_id: latest.round_id,
