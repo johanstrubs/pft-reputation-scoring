@@ -56,6 +56,8 @@ class ScoresResponse(BaseModel):
     round_id: int
     timestamp: str
     methodology_version: str
+    methodology_url: str | None = None
+    methodology_card_url: str | None = None
     validator_count: int
     enrichment_coverage: dict | None = None
     validators: list[ValidatorScore]
@@ -85,6 +87,8 @@ class MethodologyResponse(BaseModel):
     description: str
     weights: dict[str, float]
     thresholds: dict[str, dict]
+    full_card_url: str | None = None
+    full_card_api_url: str | None = None
 
 
 class WeeklyDigestResponse(BaseModel):

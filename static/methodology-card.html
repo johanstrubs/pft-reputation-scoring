@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Scoring Methodology Card</title>
+    <link rel="stylesheet" href="/static/methodology-card.css">
+</head>
+<body>
+    <div class="page">
+        <header class="hero">
+            <p class="eyebrow">Methodology Card</p>
+            <h1>Independent Validator Scoring Methodology</h1>
+            <p class="lede">A public, code-aligned explanation of what the independent scoring system measures, how it behaves, and how to interpret disagreement with other validator scoring systems.</p>
+            <div class="hero-links">
+                <a href="/leaderboard">Leaderboard</a>
+                <a href="/dataset">Dataset</a>
+                <a href="/api/methodology">Summary JSON</a>
+                <a href="/api/methodology-card" target="_blank" rel="noreferrer">Full JSON</a>
+            </div>
+        </header>
+
+        <main id="app">
+            <section class="card loading" id="loading">Loading methodology card…</section>
+            <section class="card error" id="error" hidden></section>
+            <div id="sections" hidden></div>
+        </main>
+    </div>
+    <script src="/static/methodology-card.js"></script>
+</body>
+</html>

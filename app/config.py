@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_path: str = "data/scores.db"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    public_base_url: str = "https://dashboard.pftoligarchy.com"
     methodology_version: str = "1.0.0"
     log_level: str = "INFO"
     # Manual node-to-validator key mappings (comma-separated node_key:master_key pairs)

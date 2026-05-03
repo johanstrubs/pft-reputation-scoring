@@ -79,6 +79,8 @@ async def test_scores_with_data(mock_scores):
     assert data["validator_count"] == 1
     assert data["enrichment_coverage"]["enriched"] == 1
     assert data["enrichment_coverage"]["coverage_pct"] == 100.0
+    assert data["methodology_url"].endswith("/api/methodology")
+    assert data["methodology_card_url"].endswith("/methodology-card")
     assert data["validators"][0]["public_key"] == "nHTest1"
     assert data["validators"][0]["composite_score"] == 85.5
 
@@ -92,6 +94,23 @@ async def test_methodology():
     data = resp.json()
     assert "weights" in data
     assert abs(sum(data["weights"].values()) - 1.0) < 0.001
+    assert data["full_card_url"].endswith("/methodology-card")
+    assert data["full_card_api_url"].endswith("/api/methodology-card")
+
+
+@pytest.mark.anyio
+async def test_methodology_card_api():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/methodology-card")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["schema_version"] == "methodology-card.v1"
+    section_ids = [section["id"] for section in data["sections"]]
+    assert "purpose_and_intended_use" in section_ids
+    assert "metric_definitions_and_weights" in section_ids
+    assert "snapshot_semantics" in section_ids
+    assert "disagreement_interpretation_guide" in section_ids
 
 
 @pytest.mark.anyio
@@ -171,6 +190,15 @@ async def test_dataset_page():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/dataset")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.anyio
+async def test_methodology_card_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/methodology-card")
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
 

@@ -31,6 +31,7 @@ from app.dataset import (
     build_latest_dataset_snapshot,
     build_risk_report,
 )
+from app.methodology_card import build_methodology_card, build_methodology_summary
 from app.scorer import ReputationScorer
 from app.database import Database
 from app.diagnostics import build_diagnostic_report
@@ -125,6 +126,8 @@ async def get_scores():
         round_id=round_id,
         timestamp=round_ts,
         methodology_version=settings.methodology_version,
+        methodology_url=f"{settings.public_base_url.rstrip('/')}/api/methodology",
+        methodology_card_url=f"{settings.public_base_url.rstrip('/')}/methodology-card",
         validator_count=len(scores),
         enrichment_coverage={
             "total_validators": len(scores),
@@ -170,33 +173,12 @@ async def get_validator_score(public_key: str):
 
 @app.get("/api/methodology", response_model=MethodologyResponse)
 async def get_methodology():
-    return MethodologyResponse(
-        version=settings.methodology_version,
-        description="Weighted composite reputation score for Post Fiat validators. "
-                    "Each metric is normalized to 0.0-1.0, multiplied by its weight, "
-                    "and the sum is scaled to 0-100.",
-        weights={
-            "agreement_1h": 0.10,
-            "agreement_24h": 0.15,
-            "agreement_30d": 0.20,
-            "uptime": 0.08,
-            "poll_success": 0.07,
-            "latency": 0.10,
-            "peer_count": 0.10,
-            "version": 0.10,
-            "diversity": 0.10,
-        },
-        thresholds={
-            "agreement": {"min": 0.8, "max": 1.0, "scoring": "linear, <0.8 = 0; total=0 treated as neutral 0.5"},
-            "uptime": {"scoring": "normalized against max observed uptime in cohort", "unit": "seconds, also reported as percentage"},
-            "poll_success": {"full_marks_pct": 95, "zero_pct": 70, "scoring": "linear between; our own reachability tracking"},
-            "latency": {"full_marks_ms": 50, "zero_ms": 500, "scoring": "linear between"},
-            "peer_count": {"full_marks": 10, "zero": 3, "scoring": "linear between"},
-            "avg_ledger_interval": {"unit": "seconds per ledger", "description": "computed from complete_ledgers range / uptime"},
-            "version": {"latest": 1.0, "one_behind": 0.8, "older": 0.5},
-            "diversity": {"penalty_threshold": 0.30, "scoring": "penalty if >30% share same ASN"},
-        },
-    )
+    return MethodologyResponse(**build_methodology_summary())
+
+
+@app.get("/api/methodology-card")
+async def get_methodology_card():
+    return build_methodology_card()
 
 
 @app.get("/api/digest/latest", response_model=WeeklyDigestResponse)
@@ -882,6 +864,11 @@ async def blast_radius_page():
 @app.get("/dataset")
 async def dataset_page():
     return FileResponse(os.path.join(STATIC_DIR, "dataset.html"))
+
+
+@app.get("/methodology-card")
+async def methodology_card_page():
+    return FileResponse(os.path.join(STATIC_DIR, "methodology-card.html"))
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
